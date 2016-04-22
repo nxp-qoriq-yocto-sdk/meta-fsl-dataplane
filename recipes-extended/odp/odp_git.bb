@@ -45,5 +45,7 @@ do_compile_prepend () {
 }
 
 FILES_${PN}-staticdev += "${datadir}/opendataplane/*.la"
+FILES_${PN} += "/usr/odp/bin /usr/odp/scripts /usr/odp/pcd"
+FILES_${PN}-dbg += "/usr/odp/bin/.debug"
 
 COMPATIBLE_MACHINE = "(ls1043ardb|ls2080ardb|t1040d4rdb-64b|t4240rdb-64b)"
