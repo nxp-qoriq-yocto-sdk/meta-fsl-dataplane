@@ -10,5 +10,5 @@ do_compile_prepend () {
 
 do_install () {
     install -d ${D}/lib/modules/${KERNEL_VERSION}/odp
-    install -m 755 ${S}/kern/nadk_kni.ko ${D}/lib/modules/${KERNEL_VERSION}/odp
+    install -m 755 ${S}/kern/odpfsl_kni.ko ${D}/lib/modules/${KERNEL_VERSION}/odp
 }
