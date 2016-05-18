@@ -1,4 +1,22 @@
-meta-fsl-dataplane
-===================
+Yocto layer for NXP DataPlane
+===================================
 
-This is the Yocto layer for Freescale DataPlane
+Dependencies
+------------
+QorIQ SDK 2.0 Release ISOs:
+QorIQ-SDK-V2.0-SOURCE-20160527-yocto.iso
+QorIQ-SDK-V2.0-AARCH64-CACHE-20160527-yocto.iso
+
+Build Images
+------------
+Download and Install the SDK ISOs from:
+http://www.nxp.com/products/software-and-tools/run-time-software/linux-sdk/linux-sdk-for-qoriq-processors:SDKLINUX
+
+Download this yocto layer into following ISO installation folder:
+<path>/QorIQ-SDK-V2.0-20160527-yocto/sources/
+
+Setup the build environment:
+  $ . ./fsl-setup-env -m <machine>
+
+Build the kernelitb:
+  $ bitbake fsl-image-kernelitb 
