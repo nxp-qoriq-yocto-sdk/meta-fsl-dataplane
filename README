@@ -1,4 +1,4 @@
-meta-fsl-odp
+meta-fsl-dataplane
 ===================
 
-This is the Yocto layer for Freescale OpenDataPlane
+This is the Yocto layer for Freescale DataPlane
