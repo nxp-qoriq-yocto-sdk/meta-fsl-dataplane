@@ -1,0 +1,39 @@
+From 4cfcc20fdbae7d722c20360eab105e3544e8c5d7 Mon Sep 17 00:00:00 2001
+From: Sunil Kumar Kori <Sunil.Kori@freescale.com>
+Date: Mon, 23 May 2016 17:19:33 +0530
+Subject: [PATCH] Setting MAC link type as MAC_LINK_TYPE_FIXED for copper ports
+
+Signed-off-by: Sunil Kumar Kori <Sunil.Kori@freescale.com>
+QODP-951
+---
+ ls2080a/RDB/dpc-0x2a41.dts | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/ls2080a/RDB/dpc-0x2a41.dts b/ls2080a/RDB/dpc-0x2a41.dts
+index 8d7e087..d8f921c 100644
+--- a/ls2080a/RDB/dpc-0x2a41.dts
++++ b/ls2080a/RDB/dpc-0x2a41.dts
+@@ -34,16 +34,16 @@
+ 		ports {
+ 			/* AQR PHYs */
+ 			mac@5 {
+-				link_type = "MAC_LINK_TYPE_PHY";
++				link_type = "MAC_LINK_TYPE_FIXED";
+ 			};
+ 			mac@6 {
+-				link_type = "MAC_LINK_TYPE_PHY";
++				link_type = "MAC_LINK_TYPE_FIXED";
+ 			};
+ 			mac@7 {
+-				link_type = "MAC_LINK_TYPE_PHY";
++				link_type = "MAC_LINK_TYPE_FIXED";
+ 			};
+ 			mac@8 {
+-				link_type = "MAC_LINK_TYPE_PHY";
++				link_type = "MAC_LINK_TYPE_FIXED";
+ 			};
+ 		};
+ 	};
+-- 
+1.8.3.2
+
