@@ -1,0 +1,56 @@
+From e9d0491c71ebc7f55fff0cb51acfa7a3b9e9e083 Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+Date: Tue, 26 Apr 2016 19:51:47 +0530
+Subject: [PATCH 18/18] Use proper offset to get the root MC portal address
+
+DPRC ID was used to calculate the offset of the root MC
+portal. We now store the offset value while scanning and use
+the same to get the MC portals address range.
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ hw/fsl-mc/fsl-mc.c | 7 +++++--
+ hw/fsl-mc/fsl-mc.h | 1 +
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/hw/fsl-mc/fsl-mc.c b/hw/fsl-mc/fsl-mc.c
+index 2685256..3a92354 100644
+--- a/hw/fsl-mc/fsl-mc.c
++++ b/hw/fsl-mc/fsl-mc.c
+@@ -77,8 +77,10 @@ int fsl_mc_get_root_mcp_addr_range(hwaddr *mc_p_addr, hwaddr *mc_p_size)
+ 	return -1;
+     }
+ 
+-    addr = host->mc_bus_base_addr +  host->mc_portals_range_offset;
+-    addr += FSLMC_MC_PORTAL_SIZE * (mcdev->dprc_id - 1);
++    /* Get to the Base of MC-Portal */
++    addr = host->mc_bus_base_addr + host->mc_portals_range_offset;
++    /* Add the Mc-portal device offset */
++    addr += mcdev->offset;
+     *mc_p_addr = addr;
+     *mc_p_size = 0x40;
+     return 0;
+@@ -119,6 +121,7 @@ int fsl_mc_register_device(FslMcDeviceState *mcdev, int region_num,
+ 
+     /* Hack to calculate the device offset address */
+     offset &= 0x00FFFFFF;
++    mcdev->offset = offset;
+ 
+     if (strncmp(name, "dprc", 10) == 0) {
+         portal = &host->mc_portal;
+diff --git a/hw/fsl-mc/fsl-mc.h b/hw/fsl-mc/fsl-mc.h
+index 9f026a3..7cecd69 100644
+--- a/hw/fsl-mc/fsl-mc.h
++++ b/hw/fsl-mc/fsl-mc.h
+@@ -90,6 +90,7 @@ typedef struct FslMcDeviceState {
+     FslMcBusState *bus;
+     bool root_dprc;
+     uint16_t dprc_id;
++    off_t offset;
+     uint8_t irq_map[60]; /* Assume no more than 10 is per device */
+     QLIST_ENTRY(FslMcDeviceState) next;
+ } FslMcDeviceState;
+-- 
+1.8.3.2
+

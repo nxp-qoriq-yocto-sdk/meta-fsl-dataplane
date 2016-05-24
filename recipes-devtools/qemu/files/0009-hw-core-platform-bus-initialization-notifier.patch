@@ -1,0 +1,64 @@
+From b4ef5218e6acc171e2a5f4bb367b5a29a4e608b6 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@freescale.com>
+Date: Thu, 14 Jan 2016 22:57:53 +0530
+Subject: [PATCH 09/18] hw/core/platform-bus: initialization notifier
+
+Add a platform_bus_link_done_notifier for devices to be notified once
+the platform bus is initialized. Address and IRQs for platform devices
+are unknown at device realization, we need to notify the device once
+the platform bus gathered all devices, i.e. when those resources are
+ready. This is required for some device initialization
+(e.g. the vSMMU base address needs to be set on the KVM device).
+
+Signed-off-by: Baptiste Reynal <b.reynal@virtualopensystems.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ hw/core/platform-bus.c    | 13 +++++++++++++
+ include/hw/platform-bus.h |  1 +
+ 2 files changed, 14 insertions(+)
+
+diff --git a/hw/core/platform-bus.c b/hw/core/platform-bus.c
+index 70e0518..ad8072d 100644
+--- a/hw/core/platform-bus.c
++++ b/hw/core/platform-bus.c
+@@ -23,6 +23,18 @@
+ #include "exec/address-spaces.h"
+ #include "sysemu/sysemu.h"
+ 
++static NotifierList platform_bus_link_done_notifiers =
++    NOTIFIER_LIST_INITIALIZER(platform_bus_link_done_notifiers);
++
++void qemu_add_platform_bus_link_done_notifier(Notifier *notify)
++{
++    notifier_list_add(&platform_bus_link_done_notifiers, notify);
++}
++
++static void qemu_run_platform_bus_link_done_notifiers(void)
++{
++    notifier_list_notify(&platform_bus_link_done_notifiers, NULL);
++}
+ 
+ /*
+  * Returns the PlatformBus IRQ number for a SysBusDevice irq number or -1 if
+@@ -195,6 +207,7 @@ static void platform_bus_init_notify(Notifier *notifier, void *data)
+     plaform_bus_refresh_irqs(pb);
+ 
+     foreach_dynamic_sysbus_device(link_sysbus_device, pb);
++    qemu_run_platform_bus_link_done_notifiers();
+ }
+ 
+ static void platform_bus_realize(DeviceState *dev, Error **errp)
+diff --git a/include/hw/platform-bus.h b/include/hw/platform-bus.h
+index bd42b83..3c3f96b 100644
+--- a/include/hw/platform-bus.h
++++ b/include/hw/platform-bus.h
+@@ -53,5 +53,6 @@ int platform_bus_get_irqn(PlatformBusDevice *platform_bus, SysBusDevice *sbdev,
+                           int n);
+ hwaddr platform_bus_get_mmio_addr(PlatformBusDevice *pbus, SysBusDevice *sbdev,
+                                   int n);
++void qemu_add_platform_bus_link_done_notifier(Notifier *notify);
+ 
+ #endif /* !HW_PLATFORM_BUS_H */
+-- 
+1.8.3.2
+

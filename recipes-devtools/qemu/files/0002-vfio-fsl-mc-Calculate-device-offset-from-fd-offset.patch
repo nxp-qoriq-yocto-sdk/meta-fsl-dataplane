@@ -1,0 +1,102 @@
+From 2b5700668dbbd6a6dc4458b98e3f179f070064ad Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@freescale.com>
+Date: Fri, 5 Jun 2015 11:44:55 +0530
+Subject: [PATCH 02/18] vfio fsl-mc: Calculate device offset from fd-offset
+
+Earlier it was assumed that device address offset can be
+Calculated from device "id" but that assumption was incorrect.
+There is no binding between "device id" and "device address offset"
+
+With this patch this binding is removed and now we calculate the
+offset from device fd-offset received from GET_REGION_INFO.
+GET_REGION_INFO currently returns complete address and vfio
+does not know what is offset and what is base, so there
+is a hack with hardcoded mask for offset
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@freescale.com>
+---
+ hw/fsl-mc/fsl-mc.c | 13 ++++++-------
+ hw/fsl-mc/fsl-mc.h |  2 +-
+ hw/vfio/fsl_mc.c   |  3 ++-
+ 3 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/hw/fsl-mc/fsl-mc.c b/hw/fsl-mc/fsl-mc.c
+index 9882e31..a712bdc 100644
+--- a/hw/fsl-mc/fsl-mc.c
++++ b/hw/fsl-mc/fsl-mc.c
+@@ -81,11 +81,10 @@ int fsl_mc_get_root_mcp_addr_range(hwaddr *mc_p_addr, hwaddr *mc_p_size)
+ 
+ int fsl_mc_register_device(FslMcDeviceState *mcdev, int region_num,
+                            MemoryRegion *mem, MemoryRegion *mmap_mem,
+-                           char *name, uint16_t id)
++                           char *name, uint16_t id, off_t offset)
+ {
+     FslMcBusState *bus;
+     FslMcHostState *host;
+-    hwaddr offset;
+     MemoryRegion *portal = NULL;
+     static bool root_dprc_probed = false;
+     FslMcDeviceState *tmp;
+@@ -113,27 +112,27 @@ int fsl_mc_register_device(FslMcDeviceState *mcdev, int region_num,
+         }
+     }
+ 
++    /* Hack to calculate the device offset address */
++    offset &= 0x00FFFFFF;
++
+     if (strncmp(name, "dprc", 10) == 0) {
+         portal = &host->mc_portal;
+-        offset = FSLMC_MC_PORTAL_SIZE * (id - 1);
+ 	if (offset > host->mc_portals_range_size) {
+             return -EINVAL;
+         }
+     } else if (strncmp(name, "dpmcp", 10) == 0) {
+         portal = &host->mc_portal;
+-        offset = FSLMC_MC_PORTAL_SIZE * id;
+ 	if (offset > host->mc_portals_range_size) {
+             return -EINVAL;
+         }
+     } else if (strncmp(name, "dpio", 10) == 0) {
+         portal = &host->qbman_portal;
+         if (region_num) {
+-            offset = host->qbman_portals_ce_offset;
++            offset += host->qbman_portals_ce_offset;
+         } else {
+-            offset = host->qbman_portals_ci_offset;
++            offset += host->qbman_portals_ci_offset;
+         }
+ 
+-        offset += FSLMC_QBMAN_PORTAL_SIZE * (id - 1);
+ 	if (offset > host->qbman_portals_range_size) {
+             return -EINVAL;
+         }
+diff --git a/hw/fsl-mc/fsl-mc.h b/hw/fsl-mc/fsl-mc.h
+index ff398f9..f78db61 100644
+--- a/hw/fsl-mc/fsl-mc.h
++++ b/hw/fsl-mc/fsl-mc.h
+@@ -94,7 +94,7 @@ typedef struct FslMcDeviceClass {
+ 
+ int fsl_mc_register_device(FslMcDeviceState *mcdev, int region_num,
+                            MemoryRegion *mem, MemoryRegion *mmap_mem,
+-                           char *name, uint16_t id);
++                           char *name, uint16_t id, off_t offset);
+ int fsl_mc_get_portals_ranges(hwaddr *mc_p_addr, hwaddr *mc_p_size,
+                               hwaddr *qbman_p_addr, hwaddr *qbman_p_size);
+ int fsl_mc_get_root_mcp_addr_range(hwaddr *mc_p_addr, hwaddr *mc_p_size);
+diff --git a/hw/vfio/fsl_mc.c b/hw/vfio/fsl_mc.c
+index 19c580a..2b8a296 100644
+--- a/hw/vfio/fsl_mc.c
++++ b/hw/vfio/fsl_mc.c
+@@ -246,7 +246,8 @@ static int vfio_fsl_mc_initfn(FslMcDeviceState *mcdev)
+         vfio_map_region(vdev, i);
+         ret = fsl_mc_register_device(mcdev, i, &vdev->regions[i]->mem,
+                                &vdev->regions[i]->mmap_mem,
+-                               vdev->name, vdev->id);
++                               vdev->name, vdev->id,
++                               vdev->regions[i]->fd_offset);
+         if (ret) {
+             return ret;
+         }
+-- 
+1.8.3.2
+

@@ -1,0 +1,42 @@
+From 9169d8c4b7f4e31516615dc067550968d3767022 Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+Date: Mon, 14 Mar 2016 20:00:32 +0530
+Subject: [PATCH 14/18] vfio fsl-mc: Synchronize Linux header for irq-num in MC
+
+Synchronize and use updated data structures
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+---
+ hw/vfio/fsl_mc.c           | 2 +-
+ linux-headers/linux/vfio.h | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hw/vfio/fsl_mc.c b/hw/vfio/fsl_mc.c
+index e1841f5..e23c8d5 100644
+--- a/hw/vfio/fsl_mc.c
++++ b/hw/vfio/fsl_mc.c
+@@ -306,7 +306,7 @@ static int vfio_set_trigger_eventfd(VFIO_LINE_IRQ *line_irq,
+     irq_set->index = line_irq->pin;
+     irq_set->start = 0;
+     irq_set->count = 1;
+-    irq_set->user_irq_id = line_irq->hw_irq_line;
++    irq_set->irq_num = line_irq->hw_irq_line;
+     pfd = (int32_t *)&irq_set->data;
+ 
+     *pfd = event_notifier_get_fd(&line_irq->interrupt);
+diff --git a/linux-headers/linux/vfio.h b/linux-headers/linux/vfio.h
+index da8ede8..36c701e 100644
+--- a/linux-headers/linux/vfio.h
++++ b/linux-headers/linux/vfio.h
+@@ -287,7 +287,7 @@ struct vfio_irq_set {
+ #define VFIO_IRQ_SET_ACTION_MASK	(1 << 3) /* Mask interrupt */
+ #define VFIO_IRQ_SET_ACTION_UNMASK	(1 << 4) /* Unmask interrupt */
+ #define VFIO_IRQ_SET_ACTION_TRIGGER	(1 << 5) /* Trigger interrupt */
+-	__u32	user_irq_id;
++	__u32	irq_num;
+ 	__u32	index;
+ 	__u32	start;
+ 	__u32	count;
+-- 
+1.8.3.2
+

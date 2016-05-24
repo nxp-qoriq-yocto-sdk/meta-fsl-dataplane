@@ -1,0 +1,557 @@
+From 4306b4627ecdd79858a90f5e3b841c7c4990502f Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@freescale.com>
+Date: Fri, 27 Nov 2015 03:22:19 +0530
+Subject: [PATCH 05/18] vfio fsl-mc: Add framework for interrupt support
+
+Interrupt will not work as SMMU is not yet setup for MSIs
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@freescale.com>
+---
+ hw/arm/fslmcbus-fdt.c         |  31 ++++++++---
+ hw/arm/virt.c                 |  13 +++++
+ hw/fsl-mc/fsl-mc.c            | 104 +++++++++++++++++++++++++++++++++++-
+ hw/fsl-mc/fsl-mc.h            |  12 +++++
+ hw/vfio/fsl_mc.c              | 119 ++++++++++++++++++++++++++++++++++++++++++
+ include/hw/arm/fslmc-fdt.h    |   2 +
+ include/hw/vfio/vfio-fsl-mc.h |  12 +++++
+ linux-headers/linux/vfio.h    |   1 +
+ 8 files changed, 285 insertions(+), 9 deletions(-)
+
+diff --git a/hw/arm/fslmcbus-fdt.c b/hw/arm/fslmcbus-fdt.c
+index 87f57ba..5658d2e 100644
+--- a/hw/arm/fslmcbus-fdt.c
++++ b/hw/arm/fslmcbus-fdt.c
+@@ -64,6 +64,9 @@ static void add_fsl_mc_bus_fdt_node(FSLMCBusFDTParams *fdt_params)
+     struct arm_boot_info *info = fdt_params->binfo;
+     const FSLMCBusSystemParams *params = fdt_params->system_params;
+     void *fdt = info->get_dtb(info, &dtb_size);
++    uint32_t *irq_attr;
++    int irq_num, i;
++    int ret;
+ 
+     /*
+      * If the user provided a dtb, we assume the dynamic sysbus nodes
+@@ -76,9 +79,18 @@ static void add_fsl_mc_bus_fdt_node(FSLMCBusFDTParams *fdt_params)
+         return;
+     }
+ 
+-    fsl_mc_get_portals_ranges(&mc_p_addr, &mc_p_size, &qbman_p_addr, &qbman_p_size);
++    fsl_mc_get_portals_ranges(&mc_p_addr, &mc_p_size,
++                              &qbman_p_addr, &qbman_p_size);
+     fsl_mc_get_root_mcp_addr_range(&mcaddr, &mcsize);
+ 
++    irq_attr = g_new(uint32_t, 64 * 3);
++    for (i = 0; i < 64; i++) {
++        irq_num = params->fslmc_bus_first_irq + i;
++        irq_attr[3 * i] = cpu_to_be32(0);
++        irq_attr[3 * i + 1] = cpu_to_be32(irq_num);
++        irq_attr[3 * i + 2] = cpu_to_be32(1);
++    }
++
+     assert(fdt);
+ 
+     node = g_strdup_printf("/fsl-mc@%"PRIx64, params->fslmc_bus_base);
+@@ -89,14 +101,17 @@ static void add_fsl_mc_bus_fdt_node(FSLMCBusFDTParams *fdt_params)
+     qemu_fdt_setprop_cells(fdt, node, "#size-cells", 1);
+     qemu_fdt_setprop_cells(fdt, node, "#address-cells", 3);
+     qemu_fdt_setprop_cells(fdt, node, "ranges", 0x0, 0x0, 0x0,
+-                                                     mc_p_addr >> 32,
+-                                                     mc_p_addr, mc_p_size,
+-                                                0x1, 0x0, 0x0,
+-                                                     qbman_p_addr >> 32,
+-                                                     qbman_p_addr,
+-                                                     qbman_p_size);
++                           mc_p_addr >> 32, mc_p_addr, mc_p_size,
++                           0x1, 0x0, 0x0, qbman_p_addr >> 32,
++                           qbman_p_addr, qbman_p_size);
+     qemu_fdt_setprop_cells(fdt, node, "reg", mcaddr >> 32, mcaddr,
+-                                             mcsize >> 32, mcsize);
++                           mcsize >> 32, mcsize);
++    ret = qemu_fdt_setprop(fdt, node, "interrupts",
++                           irq_attr, 64*3*sizeof(uint32_t));
++    if (ret) {
++        error_report("could not set interrupts property of node %s", node);
++    }
++    g_free(irq_attr);
+     g_free(node);
+ }
+ 
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 91f8d07..f92a65e 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -56,6 +56,8 @@
+ 
+ #define PLATFORM_BUS_NUM_IRQS 64
+ 
++#define FSL_MC_BUS_NUM_IRQS 64
++
+ static ARMPlatformBusSystemParams platform_bus_params;
+ static FSLMCBusSystemParams fsl_mc_bus_params;
+ 
+@@ -130,6 +132,7 @@ static const int a15irqmap[] = {
+     [VIRT_MMIO] = 16, /* ...to 16 + NUM_VIRTIO_TRANSPORTS - 1 */
+     [VIRT_GIC_V2M] = 48, /* ...to 48 + NUM_GICV2M_SPIS - 1 */
+     [VIRT_PLATFORM_BUS] = 112, /* ...to 112 + PLATFORM_BUS_NUM_IRQS -1 */
++    [VIRT_FSL_MC_BUS] = 176, /* ...to 176 + FSL_MC_BUS_NUM_IRQS - 1*/
+ };
+ 
+ static VirtBoardInfo machines[] = {
+@@ -782,10 +785,12 @@ static void create_fsl_mc(const VirtBoardInfo *vbi, qemu_irq *pic)
+     DeviceState *mcdev;
+     SysBusDevice *mcsdev;
+     FSLMCBusFDTParams *fdt_params = g_new(FSLMCBusFDTParams, 1);
++    int i;
+ 
+     mcdev = qdev_create(NULL, "fsl-mc-host");
+     mcdev->id = TYPE_FSL_MC_HOST;
+     qdev_prop_set_uint64(mcdev, "mc_bus_base_addr", base);
++    qdev_prop_set_uint64(mcdev, "mc_bus_num_irqs", FSL_MC_BUS_NUM_IRQS);
+     qdev_prop_set_uint64(mcdev, "mc_portals_range_offset", 0x0);
+     qdev_prop_set_uint64(mcdev, "mc_portals_range_size",
+                          FSLMC_MC_PORTALS_RANGE_SIZE);
+@@ -800,10 +805,18 @@ static void create_fsl_mc(const VirtBoardInfo *vbi, qemu_irq *pic)
+ 
+     fsl_mc_bus_params.fslmc_bus_base = base;
+     fsl_mc_bus_params.fslmc_bus_size = FSLMC_MC_PORTALS_RANGE_SIZE;
++    fsl_mc_bus_params.fslmc_bus_first_irq = vbi->irqmap[VIRT_FSL_MC_BUS];
++    fsl_mc_bus_params.fslmc_bus_num_irqs = FSL_MC_BUS_NUM_IRQS;
++
+     fdt_params->system_params = &fsl_mc_bus_params;
+     fdt_params->binfo = &vbi->bootinfo;
+     fdt_params->intc = "/intc";
+     fsl_register_mc_bus_fdt_creator(fdt_params);
++
++    for (i = 0; i < fsl_mc_bus_params.fslmc_bus_num_irqs; i++) {
++        int irqn = fsl_mc_bus_params.fslmc_bus_first_irq + i;
++        sysbus_connect_irq(mcsdev, i, pic[irqn]);
++    }
+ }
+ 
+ static void *machvirt_dtb(const struct arm_boot_info *binfo, int *fdt_size)
+diff --git a/hw/fsl-mc/fsl-mc.c b/hw/fsl-mc/fsl-mc.c
+index a712bdc..2685256 100644
+--- a/hw/fsl-mc/fsl-mc.c
++++ b/hw/fsl-mc/fsl-mc.c
+@@ -18,6 +18,7 @@
+ 
+ static Property fsl_mc_props[] = {
+     DEFINE_PROP_UINT64("mc_bus_base_addr", FslMcHostState, mc_bus_base_addr, 0),
++    DEFINE_PROP_UINT32("mc_bus_num_irqs", FslMcHostState, mc_bus_num_irqs, 0),
+     DEFINE_PROP_UINT64("mc_portals_range_offset", FslMcHostState,
+                        mc_portals_range_offset, 0),
+     DEFINE_PROP_UINT64("mc_portals_range_size", FslMcHostState,
+@@ -37,6 +38,10 @@ int fsl_mc_get_portals_ranges(hwaddr *mc_p_addr, hwaddr *mc_p_size,
+ 
+     dev = qdev_find_recursive(sysbus_get_default(), TYPE_FSL_MC_HOST);
+     host = FSL_MC_HOST(dev);
++    if (host == NULL) {
++        fprintf(stderr, "No FSL-MC Host bridge found\n");
++        return -ENODEV;
++    }
+ 
+     *mc_p_addr = host->mc_bus_base_addr +  host->mc_portals_range_offset;
+     *mc_p_size = host->mc_portals_range_size;
+@@ -158,6 +163,97 @@ int fsl_mc_register_device(FslMcDeviceState *mcdev, int region_num,
+     return 0;
+ }
+ 
++int fsl_mc_connect_irq(FslMcDeviceState *mcdev, int irq_num,
++                       char *name, uint16_t id)
++{
++    DeviceState *dev;
++    FslMcBusState *bus;
++    FslMcHostState *host;
++    SysBusDevice *d = NULL;
++    int max_irqs;
++    int irq_index;
++
++    bus = mcdev->bus;
++    if (bus == NULL) {
++        fprintf(stderr, "No FSL-MC Bus found\n");
++        return -ENODEV;
++    }
++
++    host = FSL_MC_HOST(bus->qbus.parent);
++    if (host == NULL) {
++        fprintf(stderr, "No FSL-MC Host bridge found\n");
++        return -ENODEV;
++    }
++
++    dev = qdev_find_recursive(sysbus_get_default(), TYPE_FSL_MC_HOST);
++    d = SYS_BUS_DEVICE(dev);
++    if (d == NULL) {
++        fprintf(stderr, "sysbus device not found\n");
++        return -ENODEV;
++    }
++
++    /* Get mapped device irq */
++    irq_index = mcdev->irq_map[irq_num];
++    if ((irq_index != 0) && test_bit(irq_index, host->used_irqs)) {
++        /* IRQ is already mapped, nothing to do */
++        fprintf(stderr, "sysbus irq already mapped\n");
++        return 0;
++    }
++
++    max_irqs = host->mc_bus_num_irqs;
++    irq_index = find_first_zero_bit(host->used_irqs, max_irqs);
++    if (irq_index >= max_irqs) {
++        hw_error("Platform Bus: Can not fit IRQ line");
++        return -ENODEV;
++    }
++
++    set_bit(irq_index, host->used_irqs);
++    /* Map device IRQ-Num to allocated irq index */
++    mcdev->irq_map[irq_num] = 176 + irq_index;
++
++    return 0;
++}
++
++int fsl_mc_assert_irq(FslMcDeviceState *mcdev, int irq_num)
++{
++    DeviceState *dev;
++    SysBusDevice *d = NULL;
++    FslMcBusState *bus;
++    FslMcHostState *host;
++    int irq_index;
++
++    bus = mcdev->bus;
++    if (bus == NULL) {
++        fprintf(stderr, "No FSL-MC Bus found\n");
++        return -ENODEV;
++    }
++
++    host = FSL_MC_HOST(bus->qbus.parent);
++    if (host == NULL) {
++        fprintf(stderr, "No FSL-MC Host bridge found\n");
++        return -ENODEV;
++    }
++
++    dev = qdev_find_recursive(sysbus_get_default(), TYPE_FSL_MC_HOST);
++    d = SYS_BUS_DEVICE(dev);
++    if (d == NULL) {
++        fprintf(stderr, "sysbus device not found\n");
++        return -ENODEV;
++    }
++
++    /* Get mapped device irq */
++    irq_index = mcdev->irq_map[irq_num];
++    irq_index -= 176;
++
++    if (!(test_bit(irq_index, host->used_irqs)) ||
++        !sysbus_is_irq_connected(d, irq_index)) {
++        return -ENODEV;
++    }
++
++    qemu_set_irq(host->irqs[irq_index], 1);
++    return 0;
++}
++
+ static int fsl_mc_qdev_init(DeviceState *qdev)
+ {
+     FslMcDeviceState *mcdev = (FslMcDeviceState *)qdev;
+@@ -233,7 +329,6 @@ static void fsl_mc_portal_write(void *opaque, hwaddr addr,
+                                 uint64_t value, unsigned size)
+ {
+     fprintf(stderr, "%s: Addr = %lx, Size = %d\n", __func__, addr, size);
+-    fprintf(stderr, "%s \n", __func__);
+ }
+ 
+ static const MemoryRegionOps fsl_mc_portal_ops = {
+@@ -259,6 +354,7 @@ static void fsl_mc_host_realize(DeviceState *dev, Error **errp)
+ {
+     FslMcHostState *s = FSL_MC_HOST(dev);
+     SysBusDevice *d = SYS_BUS_DEVICE(dev);
++    int i;
+ 
+     if (s == NULL) {
+         fprintf(stderr, "No FSL-MC Host bridge found\n");
+@@ -275,6 +371,12 @@ static void fsl_mc_host_realize(DeviceState *dev, Error **errp)
+     memory_region_init_io(&s->qbman_portal, OBJECT(s), NULL, s,
+                           "fsl_qbman portal", s->qbman_portals_range_size);
+     sysbus_init_mmio(d, &s->qbman_portal);
++
++    s->used_irqs = bitmap_new(s->mc_bus_num_irqs);
++    s->irqs = g_new0(qemu_irq, s->mc_bus_num_irqs);
++    for (i = 0; i < s->mc_bus_num_irqs; i++) {
++        sysbus_init_irq(d, &s->irqs[i]);
++    }
+ }
+ 
+ static void fsl_mc_host_class_init(ObjectClass *klass, void *data)
+diff --git a/hw/fsl-mc/fsl-mc.h b/hw/fsl-mc/fsl-mc.h
+index f78db61..a7c9867 100644
+--- a/hw/fsl-mc/fsl-mc.h
++++ b/hw/fsl-mc/fsl-mc.h
+@@ -46,17 +46,22 @@ typedef struct FslMcBusState FslMcBusState;
+ typedef struct FslMcHostState {
+     /*< private >*/
+     SysBusDevice parent_obj;
++
+     /*< public >*/
+     FslMcBusState bus;
+     MemoryRegion mc_portal;
+     MemoryRegion qbman_portal;
+     uint64_t mc_bus_base_addr;
++    uint32_t mc_bus_num_irqs;
+     uint64_t mc_portals_range_offset;
+     uint64_t mc_portals_range_size;
+     uint64_t qbman_portals_range_offset;
+     uint64_t qbman_portals_range_size;
+     uint64_t qbman_portals_ce_offset;
+     uint64_t qbman_portals_ci_offset;
++
++    qemu_irq *irqs;
++    unsigned long *used_irqs;
+ } FslMcHostState;
+ 
+ typedef struct FslMcHostClass {
+@@ -74,11 +79,13 @@ typedef struct FslMcHostClass {
+ typedef struct FslMcDeviceState {
+     /*< private >*/
+     DeviceState parent_obj;
++
+     /*< public >*/
+     DeviceState qdev;
+     FslMcBusState *bus;
+     bool root_dprc;
+     uint16_t dprc_id;
++    uint8_t irq_map[60]; /* Assume no more than 10 is per device */
+     QLIST_ENTRY(FslMcDeviceState) next;
+ } FslMcDeviceState;
+ 
+@@ -98,4 +105,9 @@ int fsl_mc_register_device(FslMcDeviceState *mcdev, int region_num,
+ int fsl_mc_get_portals_ranges(hwaddr *mc_p_addr, hwaddr *mc_p_size,
+                               hwaddr *qbman_p_addr, hwaddr *qbman_p_size);
+ int fsl_mc_get_root_mcp_addr_range(hwaddr *mc_p_addr, hwaddr *mc_p_size);
++int fsl_mc_connect_irq(FslMcDeviceState *mcdev, int irq_num,
++                       char *name, uint16_t id);
++int fsl_mc_bus_get_irq_num(int irq_index);
++int fsl_mc_assert_irq(FslMcDeviceState *mcdev, int irq_num);
++
+ #endif /* !defined(FSL_MC_FSL_MC_H) */
+diff --git a/hw/vfio/fsl_mc.c b/hw/vfio/fsl_mc.c
+index f57cd2d..7e8e4af 100644
+--- a/hw/vfio/fsl_mc.c
++++ b/hw/vfio/fsl_mc.c
+@@ -38,6 +38,30 @@ static int vfio_fsl_mc_hot_reset_multi(VFIODevice *vbasedev)
+     return 0;
+ }
+ 
++static VFIO_LINE_IRQ *vfio_init_line_irq(VFIODevice *vbasedev,
++                                         struct vfio_irq_info info)
++{
++    int ret;
++    VFIO_LINE_IRQ *line_irq;
++    VFIOFslmcDevice *vdev =
++        container_of(vbasedev, VFIOFslmcDevice, vbasedev);
++
++    line_irq = g_malloc0(sizeof(*line_irq));
++    line_irq->vdev = vdev;
++    line_irq->pin = info.index;
++    line_irq->flags = info.flags;
++
++    ret = event_notifier_init(&line_irq->interrupt, 0);
++    if (ret) {
++        g_free(line_irq);
++        error_report("vfio: Error: trigger event_notifier_init failed ");
++        return NULL;
++    }
++
++    QLIST_INSERT_HEAD(&vdev->irq_list, line_irq, next);
++    return line_irq;
++}
++
+ /**
+  * vfio_populate_device - Allocate and populate MMIO region
+  * and IRQ structs according to driver returned information
+@@ -47,6 +71,7 @@ static int vfio_fsl_mc_hot_reset_multi(VFIODevice *vbasedev)
+ static int vfio_populate_device(VFIODevice *vbasedev)
+ {
+     int i, ret = -1;
++    VFIO_LINE_IRQ *line_irq, *tmp;
+     VFIOFslmcDevice *vdev =
+         container_of(vbasedev, VFIOFslmcDevice, vbasedev);
+ 
+@@ -77,7 +102,31 @@ static int vfio_populate_device(VFIODevice *vbasedev)
+         ptr->vbasedev = vbasedev;
+     }
+ 
++    for (i = 0; i < vbasedev->num_irqs; i++) {
++        struct vfio_irq_info irq = { .argsz = sizeof(irq) };
++
++        irq.index = i;
++        ret = ioctl(vbasedev->fd, VFIO_DEVICE_GET_IRQ_INFO, &irq);
++        if (ret) {
++            error_printf("vfio: error getting device %s irq info",
++                         vbasedev->name);
++            goto irq_err;
++        }
++
++        line_irq = vfio_init_line_irq(vbasedev, irq);
++        if (!line_irq) {
++            error_report("vfio: Error installing IRQ %d up", i);
++            goto irq_err;
++        }
++    }
++
+     return 0;
++irq_err:
++    QLIST_FOREACH_SAFE(line_irq, &vdev->irq_list, next, tmp) {
++        QLIST_REMOVE(line_irq, next);
++        g_free(line_irq);
++    }
++
+ reg_error:
+     for (i = 0; i < vbasedev->num_regions; i++) {
+         g_free(vdev->regions[i]);
+@@ -155,6 +204,7 @@ static int vfio_base_device_init(VFIODevice *vbasedev)
+             return -EBUSY;
+         }
+     }
++
+     ret = vfio_get_device(group, path, vbasedev);
+     if (ret) {
+         error_report("vfio: failed to get device %s", path);
+@@ -220,10 +270,63 @@ static void vfio_fsl_mc_reset(DeviceState *dev)
+      }
+ }
+ 
++static void vfio_fsl_mc_irq_handler(VFIO_LINE_IRQ *line_irq)
++{
++    int ret;
++    VFIOFslmcDevice *vdev = line_irq->vdev;
++
++    ret = event_notifier_test_and_clear(&line_irq->interrupt);
++    if (!ret) {
++        error_report("Error when clearing fd=%d (ret = %d)\n",
++                     event_notifier_get_fd(&line_irq->interrupt), ret);
++    }
++
++    /* trigger the virtual IRQ */
++    fsl_mc_assert_irq(&vdev->mcdev, line_irq->pin);
++}
++
++/**
++ * vfio_set_trigger_eventfd - set VFIO eventfd handling
++ *
++ * Setup VFIO signaling and attach an optional user-side handler
++ * to the eventfd
++ */
++static int vfio_set_trigger_eventfd(VFIO_LINE_IRQ *line_irq,
++                                    eventfd_user_side_handler_t handler)
++{
++    VFIODevice *vbasedev = &line_irq->vdev->vbasedev;
++    struct vfio_irq_set *irq_set;
++    int argsz, ret;
++    int32_t *pfd;
++
++    argsz = sizeof(*irq_set) + sizeof(*pfd);
++    irq_set = g_malloc0(argsz);
++    irq_set->argsz = argsz;
++    irq_set->flags = VFIO_IRQ_SET_DATA_EVENTFD | VFIO_IRQ_SET_ACTION_TRIGGER;
++    irq_set->index = line_irq->pin;
++    irq_set->start = 0;
++    irq_set->count = 1;
++    irq_set->user_irq_id = line_irq->hw_irq_line;
++    pfd = (int32_t *)&irq_set->data;
++
++    *pfd = event_notifier_get_fd(&line_irq->interrupt);
++
++    qemu_set_fd_handler(*pfd, (IOHandler *)handler, NULL, line_irq);
++
++    ret = ioctl(vbasedev->fd, VFIO_DEVICE_SET_IRQS, irq_set);
++    g_free(irq_set);
++    if (ret < 0) {
++        error_report("vfio: Failed to set trigger eventfd: %m");
++        qemu_set_fd_handler(*pfd, NULL, NULL, NULL);
++    }
++    return ret;
++}
++
+ static int vfio_fsl_mc_initfn(FslMcDeviceState *mcdev)
+ {
+     VFIOFslmcDevice *vdev = DO_UPCAST(VFIOFslmcDevice, mcdev, mcdev);
+     VFIODevice *vbasedev = &vdev->vbasedev;
++    VFIO_LINE_IRQ *line_irq;
+     int i, ret;
+     char *temp;
+ 
+@@ -252,6 +355,22 @@ static int vfio_fsl_mc_initfn(FslMcDeviceState *mcdev)
+         }
+     }
+ 
++    for (i = 0; i < vbasedev->num_irqs; i++) {
++        ret = fsl_mc_connect_irq(mcdev, i, vdev->name, vdev->id);
++        if (ret) {
++            printf("Failed to connect irq for device %s.%d\n",
++                   vdev->name, vdev->id);
++            return ret;
++        }
++
++        QLIST_FOREACH(line_irq, &vdev->irq_list, next) {
++            if (line_irq->pin == i) {
++                line_irq->hw_irq_line = mcdev->irq_map[i];
++                vfio_set_trigger_eventfd(line_irq, vfio_fsl_mc_irq_handler);
++            }
++        }
++    }
++
+     return 0;
+ }
+ 
+diff --git a/include/hw/arm/fslmc-fdt.h b/include/hw/arm/fslmc-fdt.h
+index 4be5363..ed2306f 100644
+--- a/include/hw/arm/fslmc-fdt.h
++++ b/include/hw/arm/fslmc-fdt.h
+@@ -33,6 +33,8 @@
+ typedef struct {
+     hwaddr fslmc_bus_base; /* start address of the bus */
+     hwaddr fslmc_bus_size; /* size of the bus */
++    int fslmc_bus_first_irq; /* first hwirq assigned to the bus */
++    int fslmc_bus_num_irqs; /* number of hwirq assigned to the bus */
+ } FSLMCBusSystemParams;
+ 
+ /*
+diff --git a/include/hw/vfio/vfio-fsl-mc.h b/include/hw/vfio/vfio-fsl-mc.h
+index b69e3a5..8c3d6be 100644
+--- a/include/hw/vfio/vfio-fsl-mc.h
++++ b/include/hw/vfio/vfio-fsl-mc.h
+@@ -20,10 +20,22 @@
+ 
+ #define TYPE_VFIO_FSL_MC "vfio-fsl-mc"
+ 
++typedef struct VFIO_LINE_IRQ {
++    QLIST_ENTRY(VFIO_LINE_IRQ) next; /* entry for IRQ list */
++    EventNotifier interrupt; /* eventfd triggered on interrupt */
++    uint32_t hw_irq_line; /* IRQ number allocated from mc bus */
++    uint8_t pin; /* index */
++    struct VFIOFslmcDevice *vdev; /* back pointer to device */
++    uint32_t flags; /* IRQ info flags */
++} VFIO_LINE_IRQ;
++
++typedef void (*eventfd_user_side_handler_t)(VFIO_LINE_IRQ *line_irq);
++
+ typedef struct VFIOFslmcDevice {
+     FslMcDeviceState mcdev;
+     VFIODevice vbasedev; /* not a QOM object */
+     VFIORegion **regions;
++    QLIST_HEAD(, VFIO_LINE_IRQ) irq_list; /* list of IRQs */
+     char name[10];
+     uint16_t id;
+     int32_t bootindex;
+diff --git a/linux-headers/linux/vfio.h b/linux-headers/linux/vfio.h
+index c6b8f48..da8ede8 100644
+--- a/linux-headers/linux/vfio.h
++++ b/linux-headers/linux/vfio.h
+@@ -287,6 +287,7 @@ struct vfio_irq_set {
+ #define VFIO_IRQ_SET_ACTION_MASK	(1 << 3) /* Mask interrupt */
+ #define VFIO_IRQ_SET_ACTION_UNMASK	(1 << 4) /* Unmask interrupt */
+ #define VFIO_IRQ_SET_ACTION_TRIGGER	(1 << 5) /* Trigger interrupt */
++	__u32	user_irq_id;
+ 	__u32	index;
+ 	__u32	start;
+ 	__u32	count;
+-- 
+1.8.3.2
+

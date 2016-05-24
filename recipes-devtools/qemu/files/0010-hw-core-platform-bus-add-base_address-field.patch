@@ -1,0 +1,55 @@
+From a298937cea9b93c0b33fd575de99d2b1ea88517b Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@freescale.com>
+Date: Thu, 14 Jan 2016 22:58:24 +0530
+Subject: [PATCH 10/18] hw/core/platform-bus: add base_address field
+
+Add base_address field to platform_bus structure and initialize it.
+
+As the platform devices addresses are relative to the platform bus, we
+need it to get the absolute address of a device.
+
+Signed-off-by: Baptiste Reynal <b.reynal@virtualopensystems.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ hw/arm/virt.c             | 4 ++++
+ include/hw/platform-bus.h | 2 ++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index f92a65e..33a139e 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -742,6 +742,7 @@ static void create_platform_bus(VirtBoardInfo *vbi, qemu_irq *pic)
+ {
+     DeviceState *dev;
+     SysBusDevice *s;
++    PlatformBusDevice *pbus;
+     int i;
+     ARMPlatformBusFDTParams *fdt_params = g_new(ARMPlatformBusFDTParams, 1);
+     MemoryRegion *sysmem = get_system_memory();
+@@ -768,6 +769,9 @@ static void create_platform_bus(VirtBoardInfo *vbi, qemu_irq *pic)
+         platform_bus_params.platform_bus_size);
+     qdev_init_nofail(dev);
+     s = SYS_BUS_DEVICE(dev);
++    pbus = PLATFORM_BUS_DEVICE(dev);
++
++    pbus->base_address = vbi->memmap[VIRT_PLATFORM_BUS].base;
+ 
+     for (i = 0; i < platform_bus_params.platform_bus_num_irqs; i++) {
+         int irqn = platform_bus_params.platform_bus_first_irq + i;
+diff --git a/include/hw/platform-bus.h b/include/hw/platform-bus.h
+index 3c3f96b..13efc82 100644
+--- a/include/hw/platform-bus.h
++++ b/include/hw/platform-bus.h
+@@ -41,6 +41,8 @@ struct PlatformBusDevice {
+     bool done_gathering;
+ 
+     /*< public >*/
++    hwaddr base_address;
++
+     uint32_t mmio_size;
+     MemoryRegion mmio;
+ 
+-- 
+1.8.3.2
+

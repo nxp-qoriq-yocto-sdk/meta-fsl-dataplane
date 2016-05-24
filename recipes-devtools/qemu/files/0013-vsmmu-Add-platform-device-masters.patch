@@ -1,0 +1,94 @@
+From 2a8024dfaeadd4e198752a63c29625150bd4af2d Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+Date: Mon, 14 Mar 2016 19:57:56 +0530
+Subject: [PATCH 13/18] vsmmu: Add platform device masters
+
+This patch adds the device masters on vSMMU
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+---
+ hw/arm/sysbus-fdt.c             | 35 +++++++++++++++++++++++++++++++++++
+ hw/vfio/platform.c              |  1 +
+ include/hw/vfio/vfio-platform.h |  1 +
+ 3 files changed, 37 insertions(+)
+
+diff --git a/hw/arm/sysbus-fdt.c b/hw/arm/sysbus-fdt.c
+index c4c9e29..6645ff0 100644
+--- a/hw/arm/sysbus-fdt.c
++++ b/hw/arm/sysbus-fdt.c
+@@ -100,6 +100,38 @@ static int add_arm_smmu_fdt_node(SysBusDevice *sbdev, void *opaque)
+ 
+ /* Device Specific Code */
+ 
++static int add_smmu_master(SysBusDevice *sbdev, void *opaque)
++{
++    if (object_dynamic_cast(OBJECT(sbdev), TYPE_VFIO_PLATFORM) &&
++	    VFIO_PLATFORM_DEVICE(sbdev)->iommu_master) {
++        int master[2];
++        char *smmu_nodename, *master_nodename;
++        uint64_t mmio_base;
++        PlatformBusFDTData *data = opaque;
++        PlatformBusDevice *pbus = data->pbus;
++        void *fdt = data->fdt;
++        VFIOPlatformDevice *vdev = VFIO_PLATFORM_DEVICE(sbdev);
++        VFIODevice *vbasedev = &vdev->vbasedev;
++        const char *parent_node = data->pbus_node_name;
++
++        smmu_nodename = g_strdup_printf("/smmu@%" PRIx64, vsmmu->base);
++        mmio_base = platform_bus_get_mmio_addr(pbus, sbdev, 0);
++
++        master_nodename = g_strdup_printf("%s/%s@%" PRIx64, parent_node,
++                vbasedev->name,
++                mmio_base);
++
++        master[0] = cpu_to_be32(qemu_fdt_get_phandle(fdt, master_nodename));
++        master[1] = cpu_to_be32(vbasedev->group->groupid);
++
++        qemu_fdt_setprop(fdt, smmu_nodename, "mmu-masters",
++                master, 2*sizeof(int));
++
++    }
++
++    return 0;
++}
++
+ /**
+  * add_calxeda_midway_xgmac_fdt_node
+  *
+@@ -266,6 +298,9 @@ static void add_all_platform_bus_fdt_nodes(ARMPlatformBusFDTParams *fdt_params)
+ 
+     /* Loop through all dynamic sysbus devices and create their node */
+     foreach_dynamic_sysbus_device(add_fdt_node, &data);
++    if (vsmmu) {
++        foreach_dynamic_sysbus_device(add_smmu_master, &data);
++    }
+ 
+     g_free(node);
+ }
+diff --git a/hw/vfio/platform.c b/hw/vfio/platform.c
+index e46fe60..9c19bfb 100644
+--- a/hw/vfio/platform.c
++++ b/hw/vfio/platform.c
+@@ -683,6 +683,7 @@ static Property vfio_platform_dev_properties[] = {
+     DEFINE_PROP_UINT32("mmap-timeout-ms", VFIOPlatformDevice,
+                        mmap_timeout, 1100),
+     DEFINE_PROP_BOOL("x-irqfd", VFIOPlatformDevice, irqfd_allowed, true),
++    DEFINE_PROP_BOOL("x-iommu", VFIOPlatformDevice, iommu_master, false),
+     DEFINE_PROP_END_OF_LIST(),
+ };
+ 
+diff --git a/include/hw/vfio/vfio-platform.h b/include/hw/vfio/vfio-platform.h
+index c5cf1d7..cd60eed 100644
+--- a/include/hw/vfio/vfio-platform.h
++++ b/include/hw/vfio/vfio-platform.h
+@@ -59,6 +59,7 @@ typedef struct VFIOPlatformDevice {
+     QEMUTimer *mmap_timer; /* allows fast-path resume after IRQ hit */
+     QemuMutex intp_mutex; /* protect the intp_list IRQ state */
+     bool irqfd_allowed; /* debug option to force irqfd on/off */
++    bool iommu_master; /* is the device a master to the vSMMU ? */
+ } VFIOPlatformDevice;
+ 
+ typedef struct VFIOPlatformDeviceClass {
+-- 
+1.8.3.2
+

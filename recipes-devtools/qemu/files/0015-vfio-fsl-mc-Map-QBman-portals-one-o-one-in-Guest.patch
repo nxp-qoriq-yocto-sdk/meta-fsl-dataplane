@@ -1,0 +1,60 @@
+From 47648372480bd53b451ca9b46a1b63d61d39ceb8 Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+Date: Mon, 14 Mar 2016 20:04:14 +0530
+Subject: [PATCH 15/18] vfio fsl-mc: Map QBman portals one-o-one in Guest
+
+Because of h/w limitation we need to map Qman-portals
+at same address as defined in h/w to make use of dqrr/eqcr
+stashing. This h/w limitations exists in DPAA2.0 but in future
+h/w this will not be a limitation.
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+---
+ hw/arm/virt.c      | 6 +++---
+ hw/fsl-mc/fsl-mc.h | 1 +
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index 33a139e..4cfc81b 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -122,7 +122,7 @@ static const MemMapEntry a15memmap[] = {
+     [VIRT_PCIE_PIO] =           { 0x3eff0000, 0x00010000 },
+     [VIRT_PCIE_ECAM] =          { 0x3f000000, 0x01000000 },
+     [VIRT_MEM] =                { 0x40000000, 30ULL * 1024 * 1024 * 1024 },
+-    [VIRT_FSL_MC_BUS] =     	{ 0x800000000, 0x20000000 },
++    [VIRT_FSL_MC_BUS] =     	{ 0x80c000000, 0x20000000 },
+ };
+ 
+ static const int a15irqmap[] = {
+@@ -799,13 +799,13 @@ static void create_fsl_mc(const VirtBoardInfo *vbi, qemu_irq *pic)
+     qdev_prop_set_uint64(mcdev, "mc_portals_range_size",
+                          FSLMC_MC_PORTALS_RANGE_SIZE);
+     qdev_prop_set_uint64(mcdev, "qbman_portals_range_offset",
+-                         FSLMC_MC_PORTALS_RANGE_SIZE);
++                         FSLMC_QBMAN_PORTALS_RANGE_BASE);
+     qdev_prop_set_uint64(mcdev, "qbman_portals_range_size",
+                          FSLMC_QBMAN_PORTALS_RANGE_SIZE);
+     qdev_init_nofail(mcdev);
+     mcsdev = SYS_BUS_DEVICE(mcdev);
+     sysbus_mmio_map(mcsdev, 0, base);
+-    sysbus_mmio_map(mcsdev, 1, base + FSLMC_MC_PORTALS_RANGE_SIZE);
++    sysbus_mmio_map(mcsdev, 1, base + FSLMC_QBMAN_PORTALS_RANGE_BASE);
+ 
+     fsl_mc_bus_params.fslmc_bus_base = base;
+     fsl_mc_bus_params.fslmc_bus_size = FSLMC_MC_PORTALS_RANGE_SIZE;
+diff --git a/hw/fsl-mc/fsl-mc.h b/hw/fsl-mc/fsl-mc.h
+index a7c9867..8b8cc94 100644
+--- a/hw/fsl-mc/fsl-mc.h
++++ b/hw/fsl-mc/fsl-mc.h
+@@ -24,6 +24,7 @@
+ /* Size of each MC Portal */
+ #define FSLMC_MC_PORTAL_SIZE 0x10000
+ /* Range within all QBMAN portals fit in */
++#define FSLMC_QBMAN_PORTALS_RANGE_BASE	0xC000000
+ #define FSLMC_QBMAN_PORTALS_RANGE_SIZE 0x8000000
+ /* Size of each QBMAN Portal */
+ #define FSLMC_QBMAN_PORTAL_SIZE 0x10000
+-- 
+1.8.3.2
+

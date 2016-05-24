@@ -1,0 +1,47 @@
+From b5efd74e17e53475ec04980c48f8622bd3f20d3a Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@freescale.com>
+Date: Thu, 14 Jan 2016 22:52:32 +0530
+Subject: [PATCH 08/18] headers sync
+
+Signed-off-by: Baptiste Reynal <b.reynal@virtualopensystems.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ linux-headers/linux/kvm.h | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/linux-headers/linux/kvm.h b/linux-headers/linux/kvm.h
+index 3bac873..ca97b41 100644
+--- a/linux-headers/linux/kvm.h
++++ b/linux-headers/linux/kvm.h
+@@ -1003,6 +1003,19 @@ struct kvm_device_attr {
+ #define   KVM_DEV_VFIO_GROUP_ADD			1
+ #define   KVM_DEV_VFIO_GROUP_DEL			2
+ 
++#define  KVM_DEV_ARM_SMMU_V2_CFG		1
++#define   KVM_DEV_ARM_SMMU_V2_CFG_INIT			1
++#define   KVM_DEV_ARM_SMMU_V2_CFG_IRQ			2
++#define   KVM_DEV_ARM_SMMU_V2_CFG_SIZE			3
++#define  KVM_DEV_ARM_SMMU_V2_VFIO		2
++#define   KVM_DEV_ARM_SMMU_V2_VFIO_GROUP_ADD		1
++#define   KVM_DEV_ARM_SMMU_V2_VFIO_GROUP_DEL		2
++
++struct arm_smmu_v2_vfio_group_sid {
++	__u32	fd;	/* file descriptor of the VFIO group */
++	__u16	sid;
++};
++
+ enum kvm_device_type {
+ 	KVM_DEV_TYPE_FSL_MPIC_20	= 1,
+ #define KVM_DEV_TYPE_FSL_MPIC_20	KVM_DEV_TYPE_FSL_MPIC_20
+@@ -1018,6 +1031,8 @@ enum kvm_device_type {
+ #define KVM_DEV_TYPE_FLIC		KVM_DEV_TYPE_FLIC
+ 	KVM_DEV_TYPE_ARM_VGIC_V3,
+ #define KVM_DEV_TYPE_ARM_VGIC_V3	KVM_DEV_TYPE_ARM_VGIC_V3
++	KVM_DEV_TYPE_ARM_SMMU_V2,
++#define KVM_DEV_TYPE_ARM_SMMU_V2	KVM_DEV_TYPE_ARM_SMMU_V2
+ 	KVM_DEV_TYPE_MAX,
+ };
+ 
+-- 
+1.8.3.2
+
