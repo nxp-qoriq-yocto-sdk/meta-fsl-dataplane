@@ -1,0 +1,36 @@
+From da98f6a201e57582ec172360d743b0ab2eb4f513 Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@freescale.com>
+Date: Thu, 7 Jan 2016 17:00:16 +0530
+Subject: [PATCH 01/15] Revert "fsl_dpio: Fix DPIO polling thread logic"
+
+This reverts commit 0e2f4827dbe844b2b19edcce02f4d69f3b5c5cf2.
+---
+ drivers/staging/fsl-mc/bus/dpio/dpio-drv.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/drivers/staging/fsl-mc/bus/dpio/dpio-drv.c b/drivers/staging/fsl-mc/bus/dpio/dpio-drv.c
+index 4fbbb79..80add27 100644
+--- a/drivers/staging/fsl-mc/bus/dpio/dpio-drv.c
++++ b/drivers/staging/fsl-mc/bus/dpio/dpio-drv.c
+@@ -209,9 +209,7 @@ dpaa2_dpio_probe(struct fsl_mc_device *ls_dev)
+ 	desc.will_poll = 1;
+ 	desc.has_8prio = dpio_attrs.num_priorities == 8 ? 1 : 0;
+ 	desc.cpu = next_cpu;
+-	desc.stash_affinity = 1; /* TODO: Figure out how to determine
+-				    this setting - will we ever have non-affine
+-				    portals where we stash to a platform cache? */
++	desc.stash_affinity = next_cpu;
+ 	next_cpu = (next_cpu + 1) % num_active_cpus();
+ 	desc.dpio_id = ls_dev->obj_desc.id;
+ 	desc.regs_cena = ioremap_cache_ns(ls_dev->regions[0].start,
+@@ -267,7 +265,6 @@ dpaa2_dpio_probe(struct fsl_mc_device *ls_dev)
+ 			err = PTR_ERR(priv->thread);
+ 			goto err_dpaa_thread;
+ 		}
+-		kthread_unpark(priv->thread);
+ 		wake_up_process(priv->thread);
+ 	}
+ 
+-- 
+1.8.3.2
+

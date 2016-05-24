@@ -1,0 +1,76 @@
+From 482e666a088008e0425aae2c7f26d1233306c9ff Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+Date: Mon, 14 Mar 2016 16:59:09 +0530
+Subject: [PATCH 15/15] fsl-mc bus: Using root dprc contsiner for checking
+ interrupt type
+
+There is a bug when translating irq_num/SPI# to linux irq where
+child container is used while the root container must be used
+for checking interrupt-type supported. This patch corrects the
+behavior by using the root container for checking supported
+interrupt type
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+---
+ drivers/staging/fsl-mc/bus/mc-bus.c | 26 ++++++++++++--------------
+ 1 file changed, 12 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/staging/fsl-mc/bus/mc-bus.c b/drivers/staging/fsl-mc/bus/mc-bus.c
+index cc88deb..d7bedfa 100644
+--- a/drivers/staging/fsl-mc/bus/mc-bus.c
++++ b/drivers/staging/fsl-mc/bus/mc-bus.c
+@@ -351,19 +351,25 @@ bool fsl_mc_msi_irqs_supported(void)
+ }
+ EXPORT_SYMBOL_GPL(fsl_mc_msi_irqs_supported);
+ 
+-bool fsl_mc_line_irqs_supported(struct fsl_mc_device *mc_dev)
++/* Get platform dev of root DPRC container after root container probed */
++static struct platform_device *fsl_mc_get_pdev(struct fsl_mc_device *mc_dev)
+ {
+-	struct fsl_mc *mc;
+ 	struct device *parent_dev;
+-	struct platform_device *pdev;
+ 
+-	/* Get platform dev of root DPRC container after root container probed */
+ 	if (fsl_mc_bus_type.dev_root)
+ 		parent_dev = fsl_mc_bus_type.dev_root->parent;
+ 	else /* This is root container which is is not yet probed */
+ 		parent_dev = mc_dev->dev.parent;
+ 
+-	pdev = to_platform_device(parent_dev);
++	return to_platform_device(parent_dev);
++}
++
++bool fsl_mc_line_irqs_supported(struct fsl_mc_device *mc_dev)
++{
++	struct fsl_mc *mc;
++	struct platform_device *pdev;
++
++	pdev = fsl_mc_get_pdev(mc_dev);
+ 	mc = platform_get_drvdata(pdev);
+ 	return mc->gic_line_irq_supported;
+ }
+@@ -446,19 +452,11 @@ static int get_object_irq_num(struct fsl_mc_device *mc_dev, int index)
+  */
+ static int xlate_irq_num_to_irq(struct fsl_mc_device *mc_dev, int irq_num)
+ {
+-	struct device *parent_dev;
+ 	struct platform_device *pdev;
+ 	struct fsl_mc *mc;
+ 	int i;
+ 
+-	parent_dev = mc_dev->dev.parent;
+-
+-	/* Get the platform dev (fsl-mc node) */
+-	if (parent_dev->bus == &fsl_mc_bus_type)
+-		pdev = to_platform_device(parent_dev->parent);
+-	else
+-		pdev = to_platform_device(parent_dev);
+-
++	pdev = fsl_mc_get_pdev(mc_dev);
+ 	mc = platform_get_drvdata(pdev);
+ 
+ 	for (i = 0; i < mc->num_line_irqs; i++) {
+-- 
+1.8.3.2
+

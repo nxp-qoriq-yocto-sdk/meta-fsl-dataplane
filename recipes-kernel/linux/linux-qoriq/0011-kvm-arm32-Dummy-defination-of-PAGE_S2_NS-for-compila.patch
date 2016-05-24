@@ -1,0 +1,73 @@
+From 771548ea69b7d2d40dc3583750d8e318f7c0364f Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+Date: Wed, 27 Apr 2016 20:45:17 +0530
+Subject: [PATCH 11/15] kvm arm32: Dummy defination of PAGE_S2_NS for
+ compilation
+
+PAGE_S2_NS is defined as part of patch
+"kvm qman-portal: Hack to map qman portal cacheable region"
+
+But this patch fails to build on arm32, so added a dummy defination for
+now.
+
+Also added definition of __flush_dcache_area() in order to resolve
+compilation on arm32
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@nxp.com>
+---
+ arch/arm/include/asm/cacheflush.h | 2 +-
+ arch/arm/include/asm/pgtable.h    | 4 ++++
+ arch/arm/kvm/mmu.c                | 2 +-
+ 3 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/include/asm/cacheflush.h b/arch/arm/include/asm/cacheflush.h
+index 2d46862..634b57b 100644
+--- a/arch/arm/include/asm/cacheflush.h
++++ b/arch/arm/include/asm/cacheflush.h
+@@ -133,7 +133,6 @@ extern struct cpu_cache_fns cpu_cache;
+ #define __cpuc_coherent_kern_range	cpu_cache.coherent_kern_range
+ #define __cpuc_coherent_user_range	cpu_cache.coherent_user_range
+ #define __cpuc_flush_dcache_area	cpu_cache.flush_kern_dcache_area
+-
+ /*
+  * These are private to the dma-mapping API.  Do not use directly.
+  * Their sole purpose is to ensure that data held in the cache
+@@ -154,6 +153,7 @@ extern void __cpuc_flush_user_range(unsigned long, unsigned long, unsigned int);
+ extern void __cpuc_coherent_kern_range(unsigned long, unsigned long);
+ extern int  __cpuc_coherent_user_range(unsigned long, unsigned long);
+ extern void __cpuc_flush_dcache_area(void *, size_t);
++#define __flush_dcache_area            __cpuc_flush_dcache_area
+ 
+ /*
+  * These are private to the dma-mapping API.  Do not use directly.
+diff --git a/arch/arm/include/asm/pgtable.h b/arch/arm/include/asm/pgtable.h
+index f403541..fe2d940 100644
+--- a/arch/arm/include/asm/pgtable.h
++++ b/arch/arm/include/asm/pgtable.h
+@@ -101,6 +101,10 @@ extern pgprot_t		pgprot_s2_device;
+ #define PAGE_HYP_DEVICE		_MOD_PROT(pgprot_hyp_device, L_PTE_HYP)
+ #define PAGE_S2			_MOD_PROT(pgprot_s2, L_PTE_S2_RDONLY)
+ #define PAGE_S2_DEVICE		_MOD_PROT(pgprot_s2_device, L_PTE_S2_RDONLY)
++/* Dummy defination to avoid compilation error
++ * This is added as part of patch
++ * "kvm qman-portal: Hack to map qman portal cacheable region" for DPAA2 */
++#define PAGE_S2_NS		_MOD_PROT(pgprot_s2, L_PTE_S2_RDONLY)
+ 
+ #define __PAGE_NONE		__pgprot(_L_PTE_DEFAULT | L_PTE_RDONLY | L_PTE_XN | L_PTE_NONE)
+ #define __PAGE_SHARED		__pgprot(_L_PTE_DEFAULT | L_PTE_USER | L_PTE_XN)
+diff --git a/arch/arm/kvm/mmu.c b/arch/arm/kvm/mmu.c
+index f57e332..56f1fe8 100644
+--- a/arch/arm/kvm/mmu.c
++++ b/arch/arm/kvm/mmu.c
+@@ -28,7 +28,7 @@
+ #include <asm/kvm_mmio.h>
+ #include <asm/kvm_asm.h>
+ #include <asm/kvm_emulate.h>
+-
++#include <asm/cacheflush.h>
+ #include "trace.h"
+ 
+ #define NR_SWP 0x32
+-- 
+1.8.3.2
+

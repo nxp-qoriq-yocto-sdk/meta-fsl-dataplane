@@ -1,0 +1,37 @@
+From 573e2211a15465edf6bc9fe8413170b714658dbb Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Wed, 30 Mar 2016 00:08:47 +0530
+Subject: [PATCH 12/15] tmp: Do not try to configure the S1 context bank
+ translation
+
+Currently we support S2 only translations. This patch aviods the S1+S2
+translation setting and always configure in s1 bypass mode
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/iommu/arm-smmu.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/iommu/arm-smmu.c b/drivers/iommu/arm-smmu.c
+index 845909b..b863452 100644
+--- a/drivers/iommu/arm-smmu.c
++++ b/drivers/iommu/arm-smmu.c
+@@ -2355,9 +2355,15 @@ arm_vsmmu_sync_s2crs_get_vcbndx(struct arm_vsmmu_device *vsmmu, int vsid)
+ 	s2cr = vsmmu->gr0.s2cr[vsid];
+ 	switch (s2cr & (S2CR_TYPE_MASK << S2CR_TYPE_SHIFT)) {
+ 	case S2CR_TYPE_TRANS:
++	/* Currently we support S2 only translations. So configure
++	 * s1_bypass as true (in next switch case).
++	 * This will be revisited when we support nested (S1+S2) translations.
++	 */
++#if 0
+ 		/* Follow the breadcrumbs */
+ 		vcbndx = (s2cr >> S2CR_CBNDX_SHIFT) & S2CR_CBNDX_MASK;
+ 		break;
++#endif
+ 	case S2CR_TYPE_BYPASS:
+ 		s1_bypass = true;
+ 		break;
+-- 
+1.8.3.2
+

@@ -1,0 +1,165 @@
+From 77d5a8582ac09d11d92ea52724529723ceefbdfc Mon Sep 17 00:00:00 2001
+From: Bharat Bhushan <Bharat.Bhushan@freescale.com>
+Date: Fri, 20 May 2016 18:01:07 +0530
+Subject: [PATCH 13/15] fsl-mc: remane fsl_mc_interrupts_supported
+
+fsl_mc_interrupts_supported() is used to know whether MSI interrupts
+are supported, so accordingly renamed the function to
+fsl_mc_msi_irqs_supported()
+
+Signed-off-by: Bharat Bhushan <Bharat.Bhushan@freescale.com>
+---
+ drivers/staging/fsl-mc/bus/dprc-driver.c | 12 ++++++------
+ drivers/staging/fsl-mc/bus/mc-bus.c      |  4 ++--
+ drivers/staging/fsl-mc/bus/mc-sys.c      |  6 +++---
+ drivers/staging/fsl-mc/include/mc.h      |  2 +-
+ drivers/vfio/fsl-mc/vfio_fsl_mc.c        |  4 ++--
+ 5 files changed, 14 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/staging/fsl-mc/bus/dprc-driver.c b/drivers/staging/fsl-mc/bus/dprc-driver.c
+index f8d8cbe..ba76041 100644
+--- a/drivers/staging/fsl-mc/bus/dprc-driver.c
++++ b/drivers/staging/fsl-mc/bus/dprc-driver.c
+@@ -396,7 +396,7 @@ static int dprc_scan_container(struct fsl_mc_device *mc_bus_dev)
+ 	if (error < 0)
+ 		goto error;
+ 
+-	if (fsl_mc_interrupts_supported() && !mc_bus->irq_resources) {
++	if (fsl_mc_msi_irqs_supported() && !mc_bus->irq_resources) {
+ 		irq_count += FSL_MC_IRQ_POOL_MAX_EXTRA_IRQS;
+ 		error = fsl_mc_populate_irq_pool(mc_bus, irq_count);
+ 		if (error < 0)
+@@ -880,7 +880,7 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
+ 		goto error_cleanup_open;
+ 	}
+ 
+-	if (fsl_mc_interrupts_supported()) {
++	if (fsl_mc_msi_irqs_supported()) {
+ 		/*
+ 		 * Create DPMCP for the DPRC's built-in portal:
+ 		 */
+@@ -898,7 +898,7 @@ static int dprc_probe(struct fsl_mc_device *mc_dev)
+ 	if (error < 0)
+ 		goto error_destroy_dpmcp;
+ 
+-	if (fsl_mc_interrupts_supported()) {
++	if (fsl_mc_msi_irqs_supported()) {
+ 		/*
+ 		 * The fsl_mc_device object associated with the DPMCP object
+ 		 * created above was created as part of the
+@@ -968,7 +968,7 @@ error_cleanup_dprc_scan:
+ 	fsl_mc_io_unset_dpmcp(mc_dev->mc_io);
+ 	device_for_each_child(&mc_dev->dev, NULL, __fsl_mc_device_remove);
+ 	dprc_cleanup_all_resource_pools(mc_dev);
+-	if (fsl_mc_interrupts_supported())
++	if (fsl_mc_msi_irqs_supported())
+ 		fsl_mc_cleanup_irq_pool(mc_bus);
+ 
+ error_destroy_dpmcp:
+@@ -1022,7 +1022,7 @@ static int dprc_remove(struct fsl_mc_device *mc_dev)
+ 	if (WARN_ON(!mc_bus->irq_resources))
+ 		return -EINVAL;
+ 
+-	if (fsl_mc_interrupts_supported()) {
++	if (fsl_mc_msi_irqs_supported()) {
+ 		dprc_teardown_irqs(mc_dev);
+ 		error = dprc_close(mc_bus->atomic_mc_io, 0,
+ 				   mc_bus->atomic_dprc_handle);
+@@ -1042,7 +1042,7 @@ static int dprc_remove(struct fsl_mc_device *mc_dev)
+ 	if (error < 0)
+ 		dev_err(&mc_dev->dev, "dprc_close() failed: %d\n", error);
+ 
+-	if (fsl_mc_interrupts_supported())
++	if (fsl_mc_msi_irqs_supported())
+ 		fsl_mc_cleanup_irq_pool(mc_bus);
+ 
+ 	fsl_destroy_mc_io(mc_dev->mc_io);
+diff --git a/drivers/staging/fsl-mc/bus/mc-bus.c b/drivers/staging/fsl-mc/bus/mc-bus.c
+index f173b35..67734f4 100644
+--- a/drivers/staging/fsl-mc/bus/mc-bus.c
++++ b/drivers/staging/fsl-mc/bus/mc-bus.c
+@@ -342,13 +342,13 @@ void fsl_mc_driver_unregister(struct fsl_mc_driver *mc_driver)
+ }
+ EXPORT_SYMBOL_GPL(fsl_mc_driver_unregister);
+ 
+-bool fsl_mc_interrupts_supported(void)
++bool fsl_mc_msi_irqs_supported(void)
+ {
+ 	struct fsl_mc *mc = dev_get_drvdata(fsl_mc_bus_type.dev_root->parent);
+ 
+ 	return mc->gic_supported;
+ }
+-EXPORT_SYMBOL_GPL(fsl_mc_interrupts_supported);
++EXPORT_SYMBOL_GPL(fsl_mc_msi_irqs_supported);
+ 
+ static int get_dprc_attr(struct fsl_mc_io *mc_io,
+ 			 int container_id, struct dprc_attributes *attr)
+diff --git a/drivers/staging/fsl-mc/bus/mc-sys.c b/drivers/staging/fsl-mc/bus/mc-sys.c
+index d3b6940..f9052ea 100644
+--- a/drivers/staging/fsl-mc/bus/mc-sys.c
++++ b/drivers/staging/fsl-mc/bus/mc-sys.c
+@@ -202,7 +202,7 @@ int fsl_mc_io_setup_dpmcp_irq(struct fsl_mc_io *mc_io)
+ 	if (WARN_ON(!dpmcp_dev))
+ 		return -EINVAL;
+ 
+-	if (WARN_ON(!fsl_mc_interrupts_supported()))
++	if (WARN_ON(!fsl_mc_msi_irqs_supported()))
+ 		return -EINVAL;
+ 
+ 	if (WARN_ON(dpmcp_dev->obj_desc.irq_count != 1))
+@@ -250,7 +250,7 @@ static void teardown_dpmcp_irq(struct fsl_mc_io *mc_io)
+ 
+ 	if (WARN_ON(!dpmcp_dev))
+ 		return;
+-	if (WARN_ON(!fsl_mc_interrupts_supported()))
++	if (WARN_ON(!fsl_mc_msi_irqs_supported()))
+ 		return;
+ 	if (WARN_ON(!dpmcp_dev->irqs))
+ 		return;
+@@ -329,7 +329,7 @@ int __must_check fsl_create_mc_io(struct device *dev,
+ 			goto error_destroy_mc_io;
+ 
+ 		if (!(flags & FSL_MC_IO_ATOMIC_CONTEXT_PORTAL) &&
+-		    fsl_mc_interrupts_supported()) {
++		    fsl_mc_msi_irqs_supported()) {
+ 			error = fsl_mc_io_setup_dpmcp_irq(mc_io);
+ 			if (error < 0)
+ 				goto error_destroy_mc_io;
+diff --git a/drivers/staging/fsl-mc/include/mc.h b/drivers/staging/fsl-mc/include/mc.h
+index bbeb121..aa206aa 100644
+--- a/drivers/staging/fsl-mc/include/mc.h
++++ b/drivers/staging/fsl-mc/include/mc.h
+@@ -219,7 +219,7 @@ int __must_check __fsl_mc_driver_register(struct fsl_mc_driver *fsl_mc_driver,
+ 
+ void fsl_mc_driver_unregister(struct fsl_mc_driver *driver);
+ 
+-bool fsl_mc_interrupts_supported(void);
++bool fsl_mc_msi_irqs_supported(void);
+ 
+ int __must_check fsl_mc_portal_allocate(struct fsl_mc_device *mc_dev,
+ 					uint16_t mc_io_flags,
+diff --git a/drivers/vfio/fsl-mc/vfio_fsl_mc.c b/drivers/vfio/fsl-mc/vfio_fsl_mc.c
+index 1d344c6..b709ba4 100644
+--- a/drivers/vfio/fsl-mc/vfio_fsl_mc.c
++++ b/drivers/vfio/fsl-mc/vfio_fsl_mc.c
+@@ -421,7 +421,7 @@ static int vfio_fsl_mc_probe(struct fsl_mc_device *mc_dev)
+ 			goto clean_resource_pool;
+ 		}
+ 
+-		if (fsl_mc_interrupts_supported() && !mc_bus->irq_resources) {
++		if (fsl_mc_msi_irqs_supported() && !mc_bus->irq_resources) {
+ 			irq_count = FSL_MC_IRQ_POOL_MAX_EXTRA_IRQS;
+ 			ret = fsl_mc_populate_irq_pool(mc_bus, irq_count);
+ 			if (ret < 0) {
+@@ -521,7 +521,7 @@ static int vfio_fsl_mc_remove(struct fsl_mc_device *mc_dev)
+ 		dprc_cleanup_all_resource_pools(mc_dev);
+ 		mc_bus = to_fsl_mc_bus(mc_dev);
+ 
+-		if (fsl_mc_interrupts_supported())
++		if (fsl_mc_msi_irqs_supported())
+ 			fsl_mc_cleanup_irq_pool(mc_bus);
+ 
+ 		ret = dprc_close(mc_dev->mc_io, 0, mc_dev->mc_handle);
+-- 
+1.8.3.2
+
