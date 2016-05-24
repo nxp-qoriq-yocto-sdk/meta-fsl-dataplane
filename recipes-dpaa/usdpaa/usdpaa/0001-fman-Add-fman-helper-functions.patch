@@ -1,0 +1,527 @@
+From 36f06b556a1e06be8ddb6153090efeda0064e94e Mon Sep 17 00:00:00 2001
+From: Radu Bulie <radu.bulie@nxp.com>
+Date: Fri, 20 May 2016 16:58:59 +0800
+Subject: [PATCH] fman : Add fman helper functions
+
+The following function were added by this patch:
+ fman_if_set_bp
+ fman_if_get_fdoff
+ fman_if_set_default_efqid
+ fman_if_get_ic_params
+ fman_if_set_ic_params
+ fman_if_set_fdoff
+ fman_if_set_dnia
+
+Signed-off-by: Radu Bulie <radu.bulie@nxp.com>
+---
+ include/usdpaa/fman.h | 166 +++++++++++++++++++++++++++++++++++++
+ src/fman/fman.c       | 220 +++++++++++++++++++++++++++++++++++++++++++++++---
+ 2 files changed, 373 insertions(+), 13 deletions(-)
+
+diff --git a/include/usdpaa/fman.h b/include/usdpaa/fman.h
+index 4c300be..f8c8ba4 100644
+--- a/include/usdpaa/fman.h
++++ b/include/usdpaa/fman.h
+@@ -63,6 +63,15 @@
+ /* Interface Mode Register Register for MEMAC */
+ #define IF_MODE_RLP 0x00000820
+ 
++#define FMAN_PORT_MAX_EXT_POOLS_NUM	8
++#define FMAN_PORT_OBS_EXT_POOLS_NUM	2
++#define FMAN_PORT_CG_MAP_NUM		8
++#define FMAN_PORT_PRS_RESULT_WORDS_NUM	8
++#define FMAN_PORT_BMI_FIFO_UNITS	0x100
++#define FMAN_PORT_IC_OFFSET_UNITS	0x10
++
++#define QMI_PORT_REGS_OFFSET		0x400
++
+ /* Represents the different flavour of network interface */
+ enum fman_mac_type {
+ 	fman_offline = 0,
+@@ -309,6 +318,131 @@ struct dtsec_regs {
+ 	uint32_t reserved02c0[848];
+ };
+ 
++struct rx_bmi_regs {
++	uint32_t fmbm_rcfg;		/**< Rx Configuration */
++	uint32_t fmbm_rst;		/**< Rx Status */
++	uint32_t fmbm_rda;		/**< Rx DMA attributes*/
++	uint32_t fmbm_rfp;		/**< Rx FIFO Parameters*/
++	uint32_t fmbm_rfed;		/**< Rx Frame End Data*/
++	uint32_t fmbm_ricp;		/**< Rx Internal Context Parameters*/
++	uint32_t fmbm_rim;		/**< Rx Internal Buffer Margins*/
++	uint32_t fmbm_rebm;		/**< Rx External Buffer Margins*/
++	uint32_t fmbm_rfne;		/**< Rx Frame Next Engine*/
++	uint32_t fmbm_rfca;		/**< Rx Frame Command Attributes.*/
++	uint32_t fmbm_rfpne;		/**< Rx Frame Parser Next Engine*/
++	uint32_t fmbm_rpso;		/**< Rx Parse Start Offset*/
++	uint32_t fmbm_rpp;		/**< Rx Policer Profile  */
++	uint32_t fmbm_rccb;		/**< Rx Coarse Classification Base */
++	uint32_t fmbm_reth;		/**< Rx Excessive Threshold */
++	uint32_t reserved003c[1];	/**< (0x03C 0x03F) */
++	uint32_t fmbm_rprai[FMAN_PORT_PRS_RESULT_WORDS_NUM];
++					/**< Rx Parse Results Array Init*/
++	uint32_t fmbm_rfqid;		/**< Rx Frame Queue ID*/
++	uint32_t fmbm_refqid;		/**< Rx Error Frame Queue ID*/
++	uint32_t fmbm_rfsdm;		/**< Rx Frame Status Discard Mask*/
++	uint32_t fmbm_rfsem;		/**< Rx Frame Status Error Mask*/
++	uint32_t fmbm_rfene;		/**< Rx Frame Enqueue Next Engine */
++	uint32_t reserved0074[0x2];	/**< (0x074-0x07C)  */
++	uint32_t fmbm_rcmne;		/**< Rx Frame Continuous Mode Next Engine */
++	uint32_t reserved0080[0x20];/**< (0x080 0x0FF)  */
++	uint32_t fmbm_ebmpi[FMAN_PORT_MAX_EXT_POOLS_NUM];
++					/**< Buffer Manager pool Information-*/
++	uint32_t fmbm_acnt[FMAN_PORT_MAX_EXT_POOLS_NUM];
++					/**< Allocate Counter-*/
++	uint32_t reserved0130[8];
++					/**< 0x130/0x140 - 0x15F reserved -*/
++	uint32_t fmbm_rcgm[FMAN_PORT_CG_MAP_NUM];
++					/**< Congestion Group Map*/
++	uint32_t fmbm_mpd;		/**< BM Pool Depletion  */
++	uint32_t reserved0184[0x1F];	/**< (0x184 0x1FF) */
++	uint32_t fmbm_rstc;		/**< Rx Statistics Counters*/
++	uint32_t fmbm_rfrc;		/**< Rx Frame Counter*/
++	uint32_t fmbm_rfbc;		/**< Rx Bad Frames Counter*/
++	uint32_t fmbm_rlfc;		/**< Rx Large Frames Counter*/
++	uint32_t fmbm_rffc;		/**< Rx Filter Frames Counter*/
++	uint32_t fmbm_rfdc;		/**< Rx Frame Discard Counter*/
++	uint32_t fmbm_rfldec;		/**< Rx Frames List DMA Error Counter*/
++	uint32_t fmbm_rodc;		/**< Rx Out of Buffers Discard nntr*/
++	uint32_t fmbm_rbdc;		/**< Rx Buffers Deallocate Counter*/
++	uint32_t reserved0224[0x17];	/**< (0x224 0x27F) */
++	uint32_t fmbm_rpc;		/**< Rx Performance Counters*/
++	uint32_t fmbm_rpcp;		/**< Rx Performance Count Parameters*/
++	uint32_t fmbm_rccn;		/**< Rx Cycle Counter*/
++	uint32_t fmbm_rtuc;		/**< Rx Tasks Utilization Counter*/
++	uint32_t fmbm_rrquc;		/**< Rx Receive Queue Utilization cntr*/
++	uint32_t fmbm_rduc;		/**< Rx DMA Utilization Counter*/
++	uint32_t fmbm_rfuc;		/**< Rx FIFO Utilization Counter*/
++	uint32_t fmbm_rpac;		/**< Rx Pause Activation Counter*/
++	uint32_t reserved02a0[0x18];	/**< (0x2A0 0x2FF) */
++	uint32_t fmbm_rdbg;		/**< Rx Debug-*/
++};
++
++struct oh_bmi_regs {
++	uint32_t fmbm_ocfg;		/**< O/H Configuration  */
++	uint32_t fmbm_ost;		/**< O/H Status */
++	uint32_t fmbm_oda;		/**< O/H DMA attributes  */
++	uint32_t fmbm_oicp;		/**< O/H Internal Context Parameters */
++	uint32_t fmbm_ofdne;		/**< O/H Frame Dequeue Next Engine  */
++	uint32_t fmbm_ofne;		/**< O/H Frame Next Engine  */
++	uint32_t fmbm_ofca;		/**< O/H Frame Command Attributes.  */
++	uint32_t fmbm_ofpne;		/**< O/H Frame Parser Next Engine  */
++	uint32_t fmbm_opso;		/**< O/H Parse Start Offset  */
++	uint32_t fmbm_opp;		/**< O/H Policer Profile */
++	uint32_t fmbm_occb;		/**< O/H Coarse Classification base */
++	uint32_t fmbm_oim;		/**< O/H Internal margins*/
++	uint32_t fmbm_ofp;		/**< O/H Fifo Parameters*/
++	uint32_t fmbm_ofed;		/**< O/H Frame End Data*/
++	uint32_t reserved0030[2];	/**< (0x038 - 0x03F) */
++	uint32_t fmbm_oprai[FMAN_PORT_PRS_RESULT_WORDS_NUM];
++				/**< O/H Parse Results Array Initialization  */
++	uint32_t fmbm_ofqid;		/**< O/H Frame Queue ID  */
++	uint32_t fmbm_oefqid;		/**< O/H Error Frame Queue ID  */
++	uint32_t fmbm_ofsdm;		/**< O/H Frame Status Discard Mask  */
++	uint32_t fmbm_ofsem;		/**< O/H Frame Status Error Mask  */
++	uint32_t fmbm_ofene;		/**< O/H Frame Enqueue Next Engine  */
++	uint32_t fmbm_orlmts;		/**< O/H Rate Limiter Scale  */
++	uint32_t fmbm_orlmt;		/**< O/H Rate Limiter  */
++	uint32_t fmbm_ocmne;		/**< O/H Continuous Mode Next Engine  */
++	uint32_t reserved0080[0x20];	/**< 0x080 - 0x0FF Reserved */
++	uint32_t fmbm_oebmpi[2];	/**< Buf Mngr Observed Pool Info */
++	uint32_t reserved0108[0x16];	/**< 0x108 - 0x15F Reserved */
++	uint32_t fmbm_ocgm;		/**< Observed Congestion Group Map */
++	uint32_t reserved0164[0x7];	/**< 0x164 - 0x17F Reserved */
++	uint32_t fmbm_ompd;		/**< Observed BMan Pool Depletion */
++	uint32_t reserved0184[0x1F];	/**< 0x184 - 0x1FF Reserved */
++	uint32_t fmbm_ostc;		/**< O/H Statistics Counters  */
++	uint32_t fmbm_ofrc;		/**< O/H Frame Counter  */
++	uint32_t fmbm_ofdc;		/**< O/H Frames Discard Counter  */
++	uint32_t fmbm_ofledc;		/**< O/H Frames Len Err Discard Cntr */
++	uint32_t fmbm_ofufdc;		/**< O/H Frames Unsprtd Discard Cutr  */
++	uint32_t fmbm_offc;		/**< O/H Filter Frames Counter  */
++	uint32_t fmbm_ofwdc;		/**< Rx Frames WRED Discard Counter  */
++	uint32_t fmbm_ofldec;		/**< O/H Frames List DMA Error Cntr */
++	uint32_t fmbm_obdc;		/**< O/H Buffers Deallocate Counter */
++	uint32_t reserved0218[0x17];	/**< (0x218 - 0x27F) */
++	uint32_t fmbm_opc;		/**< O/H Performance Counters  */
++	uint32_t fmbm_opcp;		/**< O/H Performance Count Parameters */
++	uint32_t fmbm_occn;		/**< O/H Cycle Counter  */
++	uint32_t fmbm_otuc;		/**< O/H Tasks Utilization Counter  */
++	uint32_t fmbm_oduc;		/**< O/H DMA Utilization Counter */
++	uint32_t fmbm_ofuc;		/**< O/H FIFO Utilization Counter */
++};
++
++struct fman_port_qmi_regs {
++	uint32_t fmqm_pnc;		/**< PortID n Configuration Register */
++	uint32_t fmqm_pns;		/**< PortID n Status Register */
++	uint32_t fmqm_pnts;		/**< PortID n Task Status Register */
++	uint32_t reserved00c[4];	/**< 0xn00C - 0xn01B */
++	uint32_t fmqm_pnen;		/**< PortID n Enqueue NIA Register */
++	uint32_t fmqm_pnetfc;		/**< PortID n Enq Total Frame Counter */
++	uint32_t reserved024[2];	/**< 0xn024 - 0x02B */
++	uint32_t fmqm_pndn;		/**< PortID n Dequeue NIA Register */
++	uint32_t fmqm_pndc;		/**< PortID n Dequeue Config Register */
++	uint32_t fmqm_pndtfc;		/**< PortID n Dequeue tot Frame cntr */
++	uint32_t fmqm_pndfdc;		/**< PortID n Dequeue FQID Dflt Cntr */
++	uint32_t fmqm_pndcc;		/**< PortID n Dequeue Confirm Counter */
++};
++
+ /* information for macless comes from device tree */
+ struct macless_port_cfg {
+ 	char macless_name[IFNAMSIZ];
+@@ -381,6 +515,16 @@ struct fman_if_bpool {
+ 	struct list_head node;
+ };
+ 
++/* Internal Context transfer params - FMBM_RICP*/
++struct fman_if_ic_params {
++        /*IC offset in the packet buffer */
++        uint16_t iceof;
++        /*IC internal offset */
++        uint16_t iciof;
++        /*IC size to copy */
++        uint16_t icsz;
++};
++
+ /* And this is the base list node that the interfaces are added to. (See
+  * fman_if_enable_all_rx() below for an example of its use.) */
+ const struct list_head *fman_if_list;
+@@ -427,6 +571,28 @@ void fman_if_disable_rx(const struct fman_if *);
+ void fman_if_loopback_enable(const struct fman_if *);
+ void fman_if_loopback_disable(const struct fman_if *);
+ 
++/* Set buffer pool on specific interface */
++void fman_if_set_bp(const struct fman_if *, unsigned num, int bpid,
++		    size_t bufsize);
++/* Get interface fd->offset value */
++int fman_if_get_fdoff(const struct fman_if *p);
++
++/* Set default error fqid on specific interface */
++void fman_if_set_err_fqid(const struct fman_if *p, uint32_t err_fqid);
++
++/* Get IC transfer params */
++int fman_if_get_ic_params(const struct fman_if *, struct fman_if_ic_params *);
++
++/* Set IC transfer params */
++int fman_if_set_ic_params(const struct fman_if *,
++			  const struct fman_if_ic_params *);
++
++/* Set interface fd->offset value */
++void fman_if_set_fdoff(const struct fman_if *p, uint32_t fd_offset);
++
++/* Set interface next invoked action for dequeue operation */
++void fman_if_set_dnia(const struct fman_if *p, uint32_t nia);
++
+ /* Enable/disable Rx on all interfaces */
+ static inline void fman_if_enable_all_rx(void)
+ {
+diff --git a/src/fman/fman.c b/src/fman/fman.c
+index 254579b..d5659bd 100644
+--- a/src/fman/fman.c
++++ b/src/fman/fman.c
+@@ -57,6 +57,11 @@ struct __fman_if {
+ 	char node_path[PATH_MAX];
+ 	uint64_t regs_size;
+ 	void *ccsr_map;
++	void *bmirx_map;
++	void *bmioh_map;
++	void *qmirx_map;
++	void *qmioh_map;
++	void *qmitx_map;
+ 	struct list_head node;
+ };
+ 
+@@ -65,6 +70,7 @@ void *fman_ccsr_map;
+ /* fman version info */
+ u16 fman_ip_rev;
+ static int get_once;
++uint64_t fman_regs_size;
+ u32 fman_dealloc_bufs_mask_hi;
+ u32 fman_dealloc_bufs_mask_lo;
+ 
+@@ -145,11 +151,10 @@ static int fman_get_ip_rev(const struct device_node *fman_node)
+ {
+ 	const uint32_t *fman_addr;
+ 	uint64_t phys_addr;
+-	uint64_t regs_size;
+ 	uint32_t ip_rev_1;
+ 	int _errno;
+ 
+-	fman_addr = of_get_address(fman_node, 0, &regs_size, NULL);
++	fman_addr = of_get_address(fman_node, 0, &fman_regs_size, NULL);
+ 	if (!fman_addr) {
+ 		pr_err("of_get_address cannot return fman address\n");
+ 		return -EINVAL;
+@@ -159,8 +164,8 @@ static int fman_get_ip_rev(const struct device_node *fman_node)
+ 		pr_err("of_translate_address failed\n");
+ 		return -EINVAL;
+ 	}
+-	fman_ccsr_map = mmap(NULL, regs_size, PROT_READ|PROT_WRITE, MAP_SHARED,
+-					ccsr_map_fd, phys_addr);
++	fman_ccsr_map = mmap(NULL, fman_regs_size, PROT_READ|PROT_WRITE,
++			     MAP_SHARED, ccsr_map_fd, phys_addr);
+ 	if (fman_ccsr_map == MAP_FAILED) {
+ 		pr_err("Can not map FMan ccsr base\n");
+ 		return -EINVAL;
+@@ -170,10 +175,6 @@ static int fman_get_ip_rev(const struct device_node *fman_node)
+ 	fman_ip_rev = (ip_rev_1 & FMAN_IP_REV_1_MAJOR_MASK) >>
+ 			FMAN_IP_REV_1_MAJOR_SHIFT;
+ 
+-	_errno = munmap(fman_ccsr_map, regs_size);
+-	if (_errno)
+-		pr_err("munmap() of FMan ccsr failed \n");
+-
+ 	return 0;
+ }
+ 
+@@ -232,8 +233,8 @@ static int fman_if_init(const struct device_node *dpa_node, int is_macless)
+ 	uint64_t cell_idx_host = 0;
+ 	
+ 	const struct device_node *mac_node = NULL, *tx_node, *pool_node,
+-			*fman_node;
+-	const uint32_t *regs_addr = NULL;
++			*fman_node, *rx_node;
++	const uint32_t *regs_addr;
+ 	const char *mname, *fname;
+ 	const char *dname = dpa_node->full_name;
+ 	int is_offline = 0, is_shared = 0;
+@@ -444,6 +445,18 @@ static int fman_if_init(const struct device_node *dpa_node, int is_macless)
+ 						&lenp);
+ 		my_err(!tx_channel_id, -EINVAL, "%s: no fsl-qman-channel-id\n",
+ 			mac_node->full_name);
++		regs_addr = of_get_address(mac_node, 0, &__if->regs_size, NULL);
++		my_err(!regs_addr, -EINVAL, "of_get_address(%s)\n", mname);
++		phys_addr = of_translate_address(mac_node, regs_addr);
++		my_err(!phys_addr, -EINVAL, "of_translate_address(%s, %p)\n",
++			mname, regs_addr);
++		__if->bmioh_map = mmap(NULL, __if->regs_size,
++				       PROT_READ | PROT_WRITE, MAP_SHARED,
++				       ccsr_map_fd, phys_addr);
++		my_err(__if->bmioh_map == MAP_FAILED, -errno,
++		       "mmap(0x%"PRIx64")\n", phys_addr);
++
++		__if->qmioh_map = QMI_PORT_REGS_OFFSET + __if->bmioh_map;
+ 	} else {
+ 		/* Extract the MAC address for private and shared interfaces */
+ 		mac_addr = of_get_property(mac_node, "local-mac-address",
+@@ -466,6 +479,19 @@ static int fman_if_init(const struct device_node *dpa_node, int is_macless)
+ 						&lenp);
+ 		my_err(!tx_channel_id, -EINVAL, "%s: no fsl-qman-channel-id\n",
+ 			tx_node->full_name);
++
++		rx_node = of_find_node_by_phandle(ports_phandle[0]);
++		my_err(!rx_node, -ENXIO, "%s: bad fsl,port-handle[0]\n", mname);
++		regs_addr = of_get_address(rx_node, 0, &__if->regs_size, NULL);
++		my_err(!regs_addr, -EINVAL, "of_get_address(%s)\n", mname);
++		phys_addr = of_translate_address(rx_node, regs_addr);
++		my_err(!phys_addr, -EINVAL, "of_translate_address(%s, %p)\n",
++			mname, regs_addr);
++		__if->bmirx_map = mmap(NULL, __if->regs_size,
++				         PROT_READ | PROT_WRITE, MAP_SHARED,
++				         ccsr_map_fd, phys_addr);
++		my_err(__if->bmirx_map == MAP_FAILED, -errno,
++		       "mmap(0x%"PRIx64")\n", phys_addr);
+ 	}
+ 
+ 	/* For shared mac case, also fill the shared_mac_name */
+@@ -889,12 +915,11 @@ err:
+ void fman_finish(void)
+ {
+ 	struct __fman_if *__if, *tmpif;
++	int _errno;
+ 
+ 	assert(ccsr_map_fd != -1);
+ 
+ 	list_for_each_entry_safe(__if, tmpif, &__ifs, __if.node) {
+-		int _errno;
+-
+ 		/* No need to disable Offline port or MAC less */
+ 		if ((__if->__if.mac_type == fman_offline) ||
+ 			(__if->__if.mac_type == fman_mac_less) ||
+@@ -922,8 +947,11 @@ void fman_finish(void)
+ 
+ 	close(ccsr_map_fd);
+ 	ccsr_map_fd = -1;
+-}
++	_errno = munmap(fman_ccsr_map, fman_regs_size);
++	if (_errno)
++		pr_err("munmap() of FMan ccsr failed \n");
+ 
++}
+ int fm_mac_add_exact_match_mac_addr(const struct fman_if *p, uint8_t *eth)
+ {
+ 	struct __fman_if *__if = container_of(p, struct __fman_if, __if);
+@@ -1179,3 +1207,169 @@ void fman_if_loopback_disable(const struct fman_if *p)
+ 		out_be32(cmdcfg, in_be32(cmdcfg) & ~CMD_CFG_LOOPBACK_EN);
+ 	}
+ }
++
++void fman_if_set_bp(const struct fman_if *p, unsigned num, int bpid,
++		    size_t bufsize)
++{
++
++	u32 fmbm_ebmpi, fmbm_ebmpi_off;
++	struct __fman_if *__if = container_of(p, struct __fman_if, __if);
++
++	assert(ccsr_map_fd != -1);
++
++	if (__if->__if.mac_type == fman_offline ||
++	   __if->__if.mac_type == fman_mac_less)
++		return;
++
++	if (__if->__if.mac_type == fman_mac_10g)
++		fmbm_ebmpi_off =  0x80000 + 0x10100 + num*4;
++	else /* fman_mac_1g*/
++		fmbm_ebmpi_off = 0x80000 + 0x8100 + (__if->__if.mac_idx - 1) * 0x1000 + num*4;
++
++
++	fmbm_ebmpi = in_be32(fman_ccsr_map + fmbm_ebmpi_off);
++	fmbm_ebmpi = 0xc0000000 | (fmbm_ebmpi & 0xffc00000) | (bpid<<16) | (bufsize);
++
++	out_be32(fman_ccsr_map + fmbm_ebmpi_off, fmbm_ebmpi);
++}
++
++int fman_if_get_fdoff(const struct fman_if *p)
++{
++	u32 fmbm_ricp, fmbm_ricp_off;
++	int fdoff;
++	struct __fman_if *__if = container_of(p, struct __fman_if, __if);
++
++	assert(ccsr_map_fd != -1);
++
++	if (__if->__if.mac_type == fman_offline ||
++	   __if->__if.mac_type == fman_mac_less)
++		return -1;
++
++	if (__if->__if.mac_type == fman_mac_10g)
++		fmbm_ricp_off =  0x80000 + 0x10014;
++	else /* fman_mac_1g*/
++		fmbm_ricp_off = 0x80000 + 0x08014 + (__if->__if.mac_idx - 1) * 0x1000;
++
++	fmbm_ricp = in_be32(fman_ccsr_map + fmbm_ricp_off);
++	/*iceof + icsz*/
++	fdoff = ((fmbm_ricp & 0x001f0000)>>16)*16 + (fmbm_ricp & 0x0000001f)*16;
++
++	return fdoff;
++}
++
++void fman_if_set_err_fqid(const struct fman_if *p, uint32_t err_fqid)
++{
++	struct __fman_if *__if = container_of(p, struct __fman_if, __if);
++
++	assert(ccsr_map_fd != -1);
++
++	if (__if->__if.mac_type == fman_mac_less ||
++	    __if->__if.mac_type == fman_onic)
++		return;
++
++	if (__if->__if.mac_type == fman_offline) {
++		unsigned *fmbm_oefqid =
++			  &((struct oh_bmi_regs *)__if->bmioh_map)->fmbm_oefqid;
++		out_be32(fmbm_oefqid, err_fqid);
++	} else {
++		unsigned *fmbm_refqid =
++			  &((struct rx_bmi_regs *)__if->bmirx_map)->fmbm_refqid;
++		out_be32(fmbm_refqid, err_fqid);
++	}
++}
++
++int fman_if_get_ic_params(const struct fman_if *p, struct fman_if_ic_params *icp)
++{
++	struct __fman_if *__if = container_of(p, struct __fman_if, __if);
++	int val = 0;
++	int iceof_mask = 0x001f0000;
++	int icsz_mask = 0x0000001f;
++	int iciof_mask = 0x00000f00;
++
++	assert(ccsr_map_fd != -1);
++
++	if (__if->__if.mac_type == fman_mac_less ||
++	    __if->__if.mac_type == fman_onic)
++		return -1;
++
++	if (__if->__if.mac_type == fman_offline) {
++		unsigned *fmbm_oicp =
++			  &((struct oh_bmi_regs *)__if->bmioh_map)->fmbm_oicp;
++		val = in_be32(fmbm_oicp);
++	} else {
++		unsigned *fmbm_ricp =
++			  &((struct rx_bmi_regs *)__if->bmirx_map)->fmbm_ricp;
++		val = in_be32(fmbm_ricp);
++	}
++        icp->iceof = (val & iceof_mask) >> 12;
++        icp->iciof = (val & iciof_mask) >> 4;
++        icp->icsz = (val & icsz_mask) << 4;
++
++        return 0;
++}
++
++int fman_if_set_ic_params(const struct fman_if *p,
++			  const struct fman_if_ic_params *icp)
++{
++	struct __fman_if *__if = container_of(p, struct __fman_if, __if);
++	int val = 0;
++	int iceof_mask = 0x001f0000;
++	int icsz_mask = 0x0000001f;
++	int iciof_mask = 0x00000f00;
++
++	assert(ccsr_map_fd != -1);
++
++	if (__if->__if.mac_type == fman_mac_less ||
++	    __if->__if.mac_type == fman_onic)
++		return -1;
++
++        val |= (icp->iceof << 12) & iceof_mask;
++        val |= (icp->iciof << 4) & iciof_mask;
++        val |= (icp->icsz >> 4) & icsz_mask;
++
++	if (__if->__if.mac_type == fman_offline) {
++		unsigned *fmbm_oicp =
++			  &((struct oh_bmi_regs *)__if->bmioh_map)->fmbm_oicp;
++		out_be32(fmbm_oicp, in_be32(fmbm_oicp) | val);
++	} else {
++		unsigned *fmbm_ricp =
++			  &((struct rx_bmi_regs *)__if->bmirx_map)->fmbm_ricp;
++		out_be32(fmbm_ricp, in_be32(fmbm_ricp) | val);
++	}
++
++        return 0;
++}
++
++void fman_if_set_fdoff(const struct fman_if *p, uint32_t fd_offset)
++{
++	struct __fman_if *__if = container_of(p, struct __fman_if, __if);
++	unsigned *fmbm_rebm;
++
++	assert(ccsr_map_fd != -1);
++
++	if (__if->__if.mac_type == fman_mac_less ||
++	    __if->__if.mac_type == fman_onic ||
++	    __if->__if.mac_type == fman_offline)
++		return;
++
++	fmbm_rebm = &((struct rx_bmi_regs *)__if->bmirx_map)->fmbm_rebm;
++
++	out_be32(fmbm_rebm, in_be32(fmbm_rebm) | (fd_offset << 16));
++
++}
++
++void fman_if_set_dnia(const struct fman_if *p, uint32_t nia)
++{
++	struct __fman_if *__if = container_of(p, struct __fman_if, __if);
++	unsigned *fmqm_pndn;
++
++	assert(ccsr_map_fd != -1);
++
++	if (__if->__if.mac_type != fman_offline)
++		return;
++
++	fmqm_pndn = &((struct fman_port_qmi_regs *)__if->qmioh_map)->fmqm_pndn;
++
++	out_be32(fmqm_pndn, nia);
++
++}
+-- 
+1.8.3.2
+
