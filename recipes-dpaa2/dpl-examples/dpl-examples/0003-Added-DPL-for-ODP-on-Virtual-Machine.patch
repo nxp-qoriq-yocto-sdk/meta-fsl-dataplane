@@ -1,7 +1,7 @@
 From 5551238584724577af5dbdf7447e220d66fdb3e1 Mon Sep 17 00:00:00 2001
 From: Nipun Gupta <nipun.gupta@nxp.com>
 Date: Wed, 25 May 2016 00:11:05 +0530
-Subject: [PATCH 2/2] Added DPL for ODP on Virtual Machine
+Subject: [PATCH 3/4] Added DPL for ODP on Virtual Machine
 
 Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
 ---

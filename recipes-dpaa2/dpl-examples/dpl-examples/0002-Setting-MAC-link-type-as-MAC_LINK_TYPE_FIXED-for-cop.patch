@@ -1,7 +1,8 @@
 From 4cfcc20fdbae7d722c20360eab105e3544e8c5d7 Mon Sep 17 00:00:00 2001
 From: Sunil Kumar Kori <Sunil.Kori@freescale.com>
 Date: Mon, 23 May 2016 17:19:33 +0530
-Subject: [PATCH] Setting MAC link type as MAC_LINK_TYPE_FIXED for copper ports
+Subject: [PATCH 2/4] Setting MAC link type as MAC_LINK_TYPE_FIXED for copper
+ ports
 
 Signed-off-by: Sunil Kumar Kori <Sunil.Kori@freescale.com>
 QODP-951

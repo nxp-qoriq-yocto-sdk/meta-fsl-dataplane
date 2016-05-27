@@ -1,0 +1,25 @@
+From 223ba764b0b312d140340eff0720980da9e99ea5 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Fri, 27 May 2016 00:07:26 +0530
+Subject: [PATCH 4/4] Added copyright on dpl-odp-virt.0x2A_0x41.dts
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ ls2080a/RDB/dpl-odp-virt.0x2A_0x41.dts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/ls2080a/RDB/dpl-odp-virt.0x2A_0x41.dts b/ls2080a/RDB/dpl-odp-virt.0x2A_0x41.dts
+index 675f854..014ba01 100644
+--- a/ls2080a/RDB/dpl-odp-virt.0x2A_0x41.dts
++++ b/ls2080a/RDB/dpl-odp-virt.0x2A_0x41.dts
+@@ -1,3 +1,7 @@
++/*
++ * Copyright 2016 Freescale Semiconductor, Inc.
++ */
++
+ /dts-v1/;
+ 
+ / {
+-- 
+1.8.3.2
+
